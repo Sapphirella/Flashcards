@@ -155,24 +155,27 @@ svg{display:block}
 .menu__item--accent{color:var(--pink-deep);font-weight:500}
 .menu__item svg{width:13px;height:13px}
 
-.drawer{
-  position:fixed;left:0;right:0;top:0;height:auto;max-height:min(74dvh,600px);z-index:60;
+/* 下拉搜索面板：从顶部滑下来的 sheet，替代原来的星标抽屉 */
+.searchsheet{
+  position:fixed;left:0;right:0;top:0;height:auto;max-height:min(78dvh,620px);z-index:60;
   background:var(--bg);border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;
   box-shadow:var(--shadow-pop);display:flex;flex-direction:column;
   transform:translateY(-101%);transition:transform .34s cubic-bezier(.32,.72,0,1);
 }
-.drawer.show{transform:none}
-.drawer__head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--line);flex:none}
-.drawer__head b{font-family:var(--serif);font-size:15px;font-weight:600}
-.drawer__list{flex:0 1 auto;overflow-y:auto}
-.drow{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line-soft)}
-.drow__star{color:var(--pink);flex:none}
-.drow__star svg{width:14px;height:14px}
-.drow__t{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.drow__t small{display:block;color:var(--muted);font-size:11px}
-.drow__x{color:var(--muted);width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex:none}
-.drow__x svg{width:13px;height:13px}
-.drawer__foot{flex:none;padding:10px 16px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--line);display:flex;gap:8px}
+.searchsheet.show{transform:none}
+.searchsheet__head{flex:none;padding:12px 14px;border-bottom:1px solid var(--line)}
+.searchbox{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 6px 0 12px}
+.searchbox:focus-within{border-color:var(--green);box-shadow:0 0 0 3px var(--green-tint)}
+.searchbox>svg{width:16px;height:16px;color:var(--muted);flex:none}
+.searchbox__input{flex:1;min-width:0;border:0;background:none;outline:none;font-size:14.5px;padding:11px 0}
+.searchbox__input::placeholder{color:var(--muted)}
+.searchsheet__list{flex:0 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.srow{display:flex;align-items:flex-start;gap:10px;width:100%;padding:11px 16px;border-bottom:1px solid var(--line-soft);text-align:left}
+.srow__t{flex:1;min-width:0}
+.srow__f{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow__b{display:block;margin-top:2px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow mark{background:var(--green-tint);color:var(--green-deep);border-radius:3px;padding:0 1px}
+.srow__g{flex:none;max-width:32%;padding-top:2px;font-size:11px;color:var(--muted);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .modal{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
 .modal.show{display:flex}
@@ -423,18 +426,18 @@ svg{display:block}
 
 <div class="scrim" id="scrim"></div>
 <div class="menu" id="deckMenu"></div>
-<aside class="drawer" id="drawer">
-  <div class="drawer__head"><b id="drawerTitle">星标</b>
-    <button class="iconbtn" id="drawerClose" aria-label="关闭">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    </button>
+<section class="searchsheet" id="searchSheet">
+  <div class="searchsheet__head">
+    <div class="searchbox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      <input class="searchbox__input" id="searchInput" type="text" placeholder="搜索卡片内容…" autocomplete="off" enterkeyhint="search" spellcheck="false">
+      <button class="iconbtn" id="searchClose" aria-label="关闭搜索">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
   </div>
-  <div class="drawer__list" id="drawerList"></div>
-  <div class="drawer__foot">
-    <button class="btn btn--primary" id="drawerOnly" style="flex:1">只刷星标</button>
-    <button class="btn btn--ghost" id="drawerClear">清空</button>
-  </div>
-</aside>
+  <div class="searchsheet__list" id="searchList"></div>
+</section>
 
 <div class="modal" id="modal">
   <div class="modal__box">
@@ -449,7 +452,7 @@ svg{display:block}
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="hint" id="hint">轻点翻面 · 左右切卡 · 上滑星标 · 下拉抽屉</div>
+<div class="hint" id="hint">轻点翻面 · 左右切卡 · 上滑星标 · 下拉搜索</div>
 <input type="file" id="fileInput" accept=".json,application/json" hidden>
 
 <script>
@@ -631,7 +634,7 @@ function toggleStar(id,force){
   const next=(force!==undefined)?force:!c.starred;
   if(next===c.starred) return;
   c.starred=next;touchCard(c);save();
-  renderStudy();renderDrawer();
+  renderStudy();
   if(ui.view==='library')renderLib();
 }
 function starCurrent(){
@@ -670,6 +673,8 @@ function openDeckMenu(){
   items.push(`<div class="menu__sep"></div>`);
   items.push(`<button class="menu__item menu__item--accent" data-act="newgroup"><span>＋ 新建卡组</span></button>`);
   items.push(`<button class="menu__item" data-act="manage"><span>管理卡组</span></button>`);
+  /* 星标抽屉已下线，星标的批量操作挪到这里 */
+  if(groupCount('star')>0) items.push(`<button class="menu__item" data-act="clearstar"><span>清空星标</span></button>`);
   m.innerHTML=items.join('');
   m.style.left=Math.max(12,Math.min(r.left,window.innerWidth-234))+'px';
   m.style.top=(r.bottom+8)+'px';
@@ -678,36 +683,67 @@ function openDeckMenu(){
 }
 function closeDeckMenu(){
   el('deckMenu').classList.remove('show');
-  if(!el('drawer').classList.contains('show')) el('scrim').classList.remove('show');
+  if(!el('searchSheet').classList.contains('show')) el('scrim').classList.remove('show');
 }
 
-/* ================= star drawer ================= */
-function renderDrawer(){
-  const list=starCards();
-  el('drawerTitle').textContent=`星标 · ${list.length}`;
-  el('drawerList').innerHTML=list.length?list.map(c=>`
-    <div class="drow">
-      <span class="drow__star"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8z"/></svg></span>
-      <span class="drow__t">${esc(c.front||'')}<small>${esc(cardGroupNames(c).join(' · ')||'未分组')}</small></span>
-      <button class="drow__x" data-unstar="${c.id}" aria-label="移出星标"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-    </div>`).join(''):`<div class="empty">暂无星标</div>`;
+/* ================= search sheet ================= */
+/* 下拉搜索面板：匹配卡片的正面与背面，命中处高亮，点击结果直接跳到该卡片。 */
+function matchCards(kw){
+  const k=(kw||'').trim().toLowerCase();
+  if(!k) return [];
+  return store.cards.filter(c=>((c.front||'')+'\n'+(c.back||'')).toLowerCase().indexOf(k)>=0);
 }
-function openDrawer(){
-  renderDrawer();
-  el('drawer').classList.add('show');
+/* 先在原文里定位下标、再分段转义 —— 直接对转义后的串做 indexOf 会因为
+   & < > 被展开成 HTML 实体而下标错位，导致高亮落在错误的位置。 */
+function markHit(text,kw){
+  const raw=String(text==null?'':text);
+  if(!kw) return esc(raw);
+  const i=raw.toLowerCase().indexOf(kw.toLowerCase());
+  if(i<0) return esc(raw);
+  return esc(raw.slice(0,i))+'<mark>'+esc(raw.slice(i,i+kw.length))+'</mark>'+esc(raw.slice(i+kw.length));
+}
+function renderSearch(){
+  const kw=(el('searchInput').value||'').trim();
+  const list=kw?matchCards(kw):[];
+  el('searchList').innerHTML=kw
+    ? (list.length
+        ? list.map(c=>`<button class="srow" data-jump="${c.id}">
+            <span class="srow__t">
+              <span class="srow__f">${markHit(c.front,kw)}</span>
+              <span class="srow__b">${markHit(c.back,kw)}</span>
+            </span>
+            <span class="srow__g">${esc(cardGroupNames(c).join(' · ')||'未分组')}</span>
+          </button>`).join('')
+        : `<div class="empty">没有匹配「${esc(kw)}」的卡片</div>`)
+    : `<div class="empty">输入关键词搜索卡片的正面或背面</div>`;
+}
+function openSearch(){
+  renderSearch();
+  el('searchSheet').classList.add('show');
   el('scrim').classList.add('show');
 }
-function closeDrawer(){
-  el('drawer').classList.remove('show');
+function closeSearch(){
+  el('searchSheet').classList.remove('show');
+  el('searchInput').blur();
   if(!el('deckMenu').classList.contains('show')) el('scrim').classList.remove('show');
+}
+/* 从搜索结果跳到某张卡片：统一切到「全部卡片」上下文再定位。
+   搜索是跨卡组的，若沿用当前卡组上下文，结果与背诵内容会对不上。 */
+function jumpToCard(id){
+  const c=findCard(id); if(!c) return;
+  ui.group='all'; store.settings.group='all';
+  ui.index=Math.max(0,cardsOf('all').findIndex(x=>x.id===id));
+  ui.flipped=false; cardEl.classList.remove('is-flipped');
+  save(); closeSearch(); show('study'); renderStudy();
+  toast('已跳转到该卡片');
 }
 
 /* ================= gestures ================= */
 let g=null, lastMoved=0;
-const TH={swipeRatio:.28,swipeVel:.5,starPx:64,drawerPx:80,tapPx:8};
+const TH={swipeRatio:.28,swipeVel:.5,starPx:64,searchPx:80,tapPx:8};
 
 function onDown(e){
-  if(e.target.closest('button,input,textarea,a,.menu,.modal,.drawer,.libfoot,.batchbar,.topbar,.set,.libbar')) return;
+  if(e.target.closest('button,input,textarea,a,.menu,.modal,.searchsheet,.libfoot,.batchbar,.topbar,.set,.libbar')) return;
   if(ui.view!=='study') return;
   const isCard=cardEl.contains(e.target);
   g={x:e.clientX,y:e.clientY,t:performance.now(),mode:null,isCard:isCard,moved:0};
@@ -721,7 +757,7 @@ function onMove(e){
   const dx=e.clientX-g.x, dy=e.clientY-g.y;
   g.moved=Math.max(g.moved,Math.hypot(dx,dy));
   if(!g.mode&&g.moved>TH.tapPx){
-    if(Math.abs(dy)>Math.abs(dx)*1.2) g.mode=dy<0?'star':'drawer';
+    if(Math.abs(dy)>Math.abs(dx)*1.2) g.mode=dy<0?'star':'search';
     else if(Math.abs(dx)>Math.abs(dy)*1.2) g.mode=g.isCard?'swipe':null;
     else g.mode=null;
   }
@@ -734,10 +770,10 @@ function onMove(e){
     const y=Math.max(dy,-130);
     cardEl.style.transition='none';
     cardEl.style.transform=`translate3d(0,${y}px,0) scale(${1+y/700})`;
-  }else if(g.mode==='drawer'){
+  }else if(g.mode==='search'){
     e.preventDefault();
-    const d=el('drawer');
-    if(!d.classList.contains('show')){d.classList.add('show');el('scrim').classList.add('show');renderDrawer();}
+    const d=el('searchSheet');
+    if(!d.classList.contains('show')){d.classList.add('show');el('scrim').classList.add('show');renderSearch();}
     d.style.transition='none';
     d.style.transform=`translateY(${Math.max(0,dy-2)}px)`;
   }
@@ -753,7 +789,7 @@ function onUp(e){
   lastMoved=moved;
   g=null;
   cardEl.classList.remove('is-moving');
-  const d=el('drawer');
+  const d=el('searchSheet');
 
   if(!mode){
     cardEl.style.transition='transform .3s cubic-bezier(.25,.8,.3,1)';
@@ -779,11 +815,13 @@ function onUp(e){
       cardEl.style.transition='transform .28s cubic-bezier(.25,.8,.3,1)';
       cardEl.style.transform='';
     }
-  }else if(mode==='drawer'){
-    if(dy>TH.drawerPx){
+  }else if(mode==='search'){
+    if(dy>TH.searchPx){
       d.style.transition='transform .34s cubic-bezier(.32,.72,0,1)';
       d.style.transform='translateY(0)';
       setTimeout(()=>{d.style.transition='';d.style.transform='';},360);
+      /* 面板落定后再聚焦，键盘弹出更稳 */
+      setTimeout(()=>{try{el('searchInput').focus()}catch(e){}},340);
     }else{
       d.style.transition='transform .26s ease';
       d.style.transform='translateY(-101%)';
@@ -803,8 +841,6 @@ cardInner.addEventListener('click',e=>{
 document.addEventListener('click',e=>{
   const sb=e.target.closest('[data-star]');
   if(sb){toggleStar(sb.dataset.star);return;}
-  const un=e.target.closest('[data-unstar]');
-  if(un){toggleStar(un.dataset.unstar,false);renderDrawer();return;}
 });
 
 /* ================= library ================= */
@@ -877,7 +913,7 @@ function openModal(title,bodyHTML,buttons,onClose){
 function closeModal(){
   el('modal').classList.remove('show');
   if(modalOnClose){const f=modalOnClose;modalOnClose=null;f();}
-  if(!el('drawer').classList.contains('show')&&!el('deckMenu').classList.contains('show')) el('scrim').classList.remove('show');
+  if(!el('searchSheet').classList.contains('show')&&!el('deckMenu').classList.contains('show')) el('scrim').classList.remove('show');
 }
 el('modalBody').addEventListener('click',e=>{
   const ren=e.target.closest('[data-ren]');
@@ -1152,11 +1188,11 @@ function show(view){
     if(store.settings.lastSync) setStatus('上次同步 '+fmt(store.settings.lastSync));
   }
 }
-/* 关闭最上层的浮层（弹窗 → 星标抽屉 → 卡组菜单）。
+/* 关闭最上层的浮层（弹窗 → 搜索面板 → 卡组菜单）。
    Android 宿主用它接管返回键：先关浮层，没有浮层可关时再退出应用。 */
 function closeTopOverlay(){
   if(el('modal').classList.contains('show')){closeModal();return true;}
-  if(el('drawer').classList.contains('show')){closeDrawer();return true;}
+  if(el('searchSheet').classList.contains('show')){closeSearch();return true;}
   if(el('deckMenu').classList.contains('show')){closeDeckMenu();return true;}
   return false;
 }
@@ -1167,17 +1203,17 @@ el('btnLibrary').onclick=()=>{ui.libGroup=ui.group==='star'?'all':ui.group;ui.ba
 el('btnSettings').onclick=()=>show('settings');
 el('libBack').onclick=()=>show('study');
 el('setBack').onclick=()=>show('study');
-el('scrim').onclick=()=>{closeDeckMenu();closeDrawer();};
-el('drawerClose').onclick=closeDrawer;
-el('drawerClear').onclick=()=>{
-  starCards().forEach(c=>{c.starred=false;touchCard(c);});
-  save();renderDrawer();renderStudy();toast('已清空星标');
+el('scrim').onclick=()=>{closeDeckMenu();closeSearch();};
+el('searchInput').addEventListener('input',renderSearch);
+/* ✕ 关闭面板并清空查询：面板遮住了顶部的卡组按钮，
+   必须有一个明确的「收起」入口，否则只能靠点遮罩关闭。 */
+el('searchClose').onclick=()=>{
+  el('searchInput').value='';renderSearch();closeSearch();
 };
-el('drawerOnly').onclick=()=>{
-  ui.group='star';ui.index=0;ui.flipped=false;store.settings.group='star';save();
-  cardEl.classList.remove('is-flipped');
-  closeDrawer();show('study');renderStudy();
-};
+el('searchList').addEventListener('click',e=>{
+  const row=e.target.closest('[data-jump]');if(!row)return;
+  jumpToCard(row.dataset.jump);
+});
 el('libAdd').onclick=()=>{
   const preset=(ui.libGroup&&ui.libGroup!=='all'&&ui.libGroup!=='star')?[ui.libGroup]:[];
   editCard(null,preset);
@@ -1235,6 +1271,14 @@ el('deckMenu').addEventListener('click',e=>{
     closeDeckMenu();
     if(a.dataset.act==='newgroup')setTimeout(newGroup,160);
     if(a.dataset.act==='manage')setTimeout(manageGroups,160);
+    if(a.dataset.act==='clearstar'){
+      const n=starCards().length;
+      openModal('清空星标',`<p style="font-size:13.5px;color:var(--ink-2)">将取消 ${n} 张卡片的星标，卡片本身不会删除。</p>`,
+        [{text:'取消'},{text:'清空星标',cls:'btn--danger',fn:()=>{
+          starCards().forEach(c=>{c.starred=false;touchCard(c);});
+          save();renderStudy();renderLib();toast('已清空星标');
+        }}]);
+    }
   }
 });
 el('libChips').addEventListener('click',e=>{
@@ -1283,7 +1327,7 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='ArrowRight')goCard(1);
   else if(e.key==='ArrowLeft')goCard(-1);
   else if(e.key.toLowerCase()==='s')starCurrent();
-  else if(e.key.toLowerCase()==='d')openDrawer();
+  else if(e.key.toLowerCase()==='d')openSearch();
 });
 
 /* ================= init ================= */
@@ -1291,7 +1335,7 @@ store=load();
 ui.group=store.settings.group||'all';
 applyTheme();
 renderStudy();
-renderDrawer();
+renderSearch();
 if(!localStorage.getItem(HINT_KEY)){
   localStorage.setItem(HINT_KEY,'1');
   setTimeout(()=>{el('hint').classList.add('show');setTimeout(()=>el('hint').classList.remove('show'),3400)},700);
