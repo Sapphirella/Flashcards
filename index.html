@@ -76,7 +76,7 @@ svg{display:block}
 .stage{flex:1;display:flex;align-items:center;justify-content:center;padding:12px 20px 6px;min-height:0;touch-action:pan-y}
 .card{
   width:min(86vw,420px);height:60dvh;max-height:560px;position:relative;
-  perspective:1400px;touch-action:none;will-change:transform;
+  perspective:1400px;touch-action:pan-y;will-change:transform;
 }
 .card__inner{
   position:absolute;inset:0;transform-style:preserve-3d;
@@ -97,11 +97,19 @@ svg{display:block}
 }
 .face--back{transform:rotateY(180deg)}
 .face__top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex:none;font-size:12px;color:var(--muted)}
-.face__body{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:10px 2px}
-.face__body.is-top{align-items:flex-start;justify-content:flex-start}
+/* 卡内正文是唯一的滚动区：长内容在这里上下滑，纵向手势不再被自研手势劫持。
+   居中用子元素的 auto 外边距，而不是在这里 align-items:center ——
+   flex 居中遇到溢出内容会上下同时裁切，auto 边距在剩余空间为负时按 0 处理，
+   于是短内容仍然居中、长内容从顶部开始可滚。 */
+.face__body{
+  flex:1;display:flex;flex-direction:column;min-height:0;padding:10px 2px;
+  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+}
+.face__body>*{flex:none;margin-top:auto;margin-bottom:auto}
+.face__body.is-top>*{margin-top:0;margin-bottom:auto}
 .front-text{
   font-family:var(--serif);font-weight:600;font-size:var(--fs-front);line-height:1.28;
-  text-align:center;letter-spacing:.01em;white-space:pre-wrap;word-break:break-word;
+  text-align:center;letter-spacing:.01em;white-space:pre-wrap;word-break:break-word;width:100%;
 }
 .back-text{
   font-family:var(--serif);font-size:var(--fs-back);line-height:1.85;color:var(--ink-2);
@@ -129,7 +137,7 @@ svg{display:block}
 .hint{
   position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 76px);transform:translateX(-50%);
   font-size:11.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);
-  padding:7px 14px;border-radius:999px;white-space:nowrap;z-index:40;
+  padding:7px 14px;border-radius:999px;width:max-content;max-width:calc(100vw - 32px);text-align:center;line-height:1.5;z-index:40;
   opacity:0;pointer-events:none;transition:opacity .5s;
 }
 .hint.show{opacity:1}
@@ -457,7 +465,7 @@ svg{display:block}
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="hint" id="hint">轻点翻面 · 左右切卡 · 上滑星标 · 下拉搜索</div>
+<div class="hint" id="hint">轻点翻面 · 左右切卡 · 长内容上下滑 · 顶部下拉搜索</div>
 <input type="file" id="fileInput" accept=".json,application/json" hidden>
 
 <script>
@@ -744,14 +752,30 @@ function jumpToCard(id){
 }
 
 /* ================= gestures ================= */
+/* 手势状态机：只有「纵向」与「横向」两种模式。
+   纵向：只在视口顶部 1/5 内、且起点不在可滚动的卡内正文上时，才允许下拉唤出搜索；
+         其余纵向拖动交给原生滚动（长内容卡片）。
+   横向：在卡片上左右滑切卡。
+   上滑没有任何手势（星标只保留手动按钮、键盘 S 与菜单入口）。 */
 let g=null, lastMoved=0;
-const TH={swipeRatio:.28,swipeVel:.5,starPx:64,searchPx:80,tapPx:8};
+const TH={swipeRatio:.28,swipeVel:.5,searchPx:80,tapPx:8};
+
+function scrollBoxAt(target){
+  const box=target&&target.closest?target.closest('.face__body'):null;
+  if(!box) return null;
+  return box.scrollHeight-box.clientHeight>1?box:null;
+}
 
 function onDown(e){
   if(e.target.closest('button,input,textarea,a,.menu,.modal,.searchsheet,.libfoot,.batchbar,.topbar,.set,.libbar')) return;
   if(ui.view!=='study') return;
   const isCard=cardEl.contains(e.target);
-  g={x:e.clientX,y:e.clientY,t:performance.now(),mode:null,isCard:isCard,moved:0};
+  /* 起点落在「现在真的能滚」的卡内正文上：纵向一律交给原生滚动，自研手势不抢。 */
+  const box=isCard?scrollBoxAt(e.target):null;
+  g={x:e.clientX,y:e.clientY,t:performance.now(),mode:null,isCard:isCard,moved:0,
+     scroll:box,scrollTop0:box?box.scrollTop:0,
+     /* 搜索触发区在按下时就定死。等到 onMove 再看 clientY 已是当前点，起点信息已经丢了。 */
+     fromTop:e.clientY<window.innerHeight*0.2};
   if(isCard) cardEl.classList.add('is-moving');
   window.addEventListener('pointermove',onMove,{passive:false});
   window.addEventListener('pointerup',onUp);
@@ -760,9 +784,13 @@ function onDown(e){
 function onMove(e){
   if(!g) return;
   const dx=e.clientX-g.x, dy=e.clientY-g.y;
+  g.lastX=e.clientX;g.lastY=e.clientY;
   g.moved=Math.max(g.moved,Math.hypot(dx,dy));
   if(!g.mode&&g.moved>TH.tapPx){
-    if(Math.abs(dy)>Math.abs(dx)*1.2) g.mode=dy<0?'star':'search';
+    if(Math.abs(dy)>Math.abs(dx)*1.2){
+      /* 能滚的正文里：纵向不设模式；否则只有「顶部 1/5 起手 + 向下」才进搜索 */
+      g.mode=g.scroll?null:((dy>0&&g.fromTop)?'search':null);
+    }
     else if(Math.abs(dx)>Math.abs(dy)*1.2) g.mode=g.isCard?'swipe':null;
     else g.mode=null;
   }
@@ -770,11 +798,6 @@ function onMove(e){
     e.preventDefault();
     cardEl.style.transition='none';
     cardEl.style.transform=`translate3d(${dx}px,0,0) rotate(${dx*0.04}deg)`;
-  }else if(g.mode==='star'){
-    e.preventDefault();
-    const y=Math.max(dy,-130);
-    cardEl.style.transition='none';
-    cardEl.style.transform=`translate3d(0,${y}px,0) scale(${1+y/700})`;
   }else if(g.mode==='search'){
     e.preventDefault();
     const d=el('searchSheet');
@@ -788,10 +811,17 @@ function onUp(e){
   window.removeEventListener('pointerup',onUp);
   window.removeEventListener('pointercancel',onUp);
   if(!g) return;
-  const dx=e.clientX-g.x, dy=e.clientY-g.y;
+  /* pointercancel 的 clientX/Y 是 0，用最后一次 pointermove 的坐标结算，
+     否则一个已经划出去的横滑会在浏览器接管手势时被算成「向右猛滑」。 */
+  const canceled=e.type==='pointercancel';
+  const cx=(canceled&&g.lastX!==undefined)?g.lastX:e.clientX;
+  const cy=(canceled&&g.lastY!==undefined)?g.lastY:e.clientY;
+  const dx=cx-g.x, dy=cy-g.y;
   const dt=Math.max(1,performance.now()-g.t);
   const mode=g.mode, moved=g.moved;
-  lastMoved=moved;
+  const box=g.scroll, scrollTop0=g.scrollTop0;
+  /* 原生滚动动过之后不算轻点，免得滚完手一松就翻面 */
+  lastMoved=(box&&Math.abs(box.scrollTop-scrollTop0)>2)?999:moved;
   g=null;
   cardEl.classList.remove('is-moving');
   const d=el('searchSheet');
@@ -812,16 +842,9 @@ function onUp(e){
       cardEl.style.transition='transform .28s cubic-bezier(.25,.8,.3,1)';
       cardEl.style.transform='';
     }
-  }else if(mode==='star'){
-    if(dy<-TH.starPx){
-      cardEl.style.transition='none';
-      starCurrent();
-    }else{
-      cardEl.style.transition='transform .28s cubic-bezier(.25,.8,.3,1)';
-      cardEl.style.transform='';
-    }
   }else if(mode==='search'){
-    if(dy>TH.searchPx){
+    /* 搜索面板只在正常松手时吸附展开：被浏览器接管的手势不唤出面板 */
+    if(!canceled&&dy>TH.searchPx){
       d.style.transition='transform .34s cubic-bezier(.32,.72,0,1)';
       d.style.transform='translateY(0)';
       setTimeout(()=>{d.style.transition='';d.style.transform='';},360);
