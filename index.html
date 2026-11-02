@@ -756,7 +756,14 @@ function jumpToCard(id){
    纵向：只在视口顶部 1/5 内、且起点不在可滚动的卡内正文上时，才允许下拉唤出搜索；
          其余纵向拖动交给原生滚动（长内容卡片）。
    横向：在卡片上左右滑切卡。
-   上滑没有任何手势（星标只保留手动按钮、键盘 S 与菜单入口）。 */
+   上滑没有任何手势（星标只保留手动按钮、键盘 S 与菜单入口）。
+
+   ⚠️ 触摸手势必须走 touch 事件，不能只靠 pointer 事件：
+   浏览器一旦接管手势（原生滚动 / 系统手势）就会给页面发 pointercancel，
+   之后的 pointermove 全部中断 —— 横滑会「划到一半被掐断」，表现为切不了卡。
+   touch 事件会一路送到 touchend（touchcancel 才是真取消），而且 non-passive
+   的 touchmove 可以 preventDefault，把横向手势从浏览器手里抢回来。
+   鼠标 / 触控笔仍然走 pointer 事件，两套输入共用下面同一份状态机。 */
 let g=null, lastMoved=0;
 const TH={swipeRatio:.28,swipeVel:.5,searchPx:80,tapPx:8};
 
@@ -766,27 +773,28 @@ function scrollBoxAt(target){
   return box.scrollHeight-box.clientHeight>1?box:null;
 }
 
-function onDown(e){
-  if(e.target.closest('button,input,textarea,a,.menu,.modal,.searchsheet,.libfoot,.batchbar,.topbar,.set,.libbar')) return;
+function gestureStart(x,y,target,src){
+  if(g) return;
+  if(!target||!target.closest) return;
+  if(target.closest('button,input,textarea,a,.menu,.modal,.searchsheet,.libfoot,.batchbar,.topbar,.set,.libbar')) return;
   if(ui.view!=='study') return;
-  const isCard=cardEl.contains(e.target);
+  const isCard=cardEl.contains(target);
   /* 起点落在「现在真的能滚」的卡内正文上：纵向一律交给原生滚动，自研手势不抢。 */
-  const box=isCard?scrollBoxAt(e.target):null;
-  g={x:e.clientX,y:e.clientY,t:performance.now(),mode:null,isCard:isCard,moved:0,
-     scroll:box,scrollTop0:box?box.scrollTop:0,
-     /* 搜索触发区在按下时就定死。等到 onMove 再看 clientY 已是当前点，起点信息已经丢了。 */
-     fromTop:e.clientY<window.innerHeight*0.2};
+  const box=isCard?scrollBoxAt(target):null;
+  g={src,x,y,t:performance.now(),mode:null,isCard:isCard,moved:0,
+     scroll:box,scrollTop0:box?box.scrollTop:0,scrollMoved:false,
+     /* 搜索触发区在按下时就定死。等到 move 再看 clientY 已是当前点，起点信息已经丢了。 */
+     fromTop:y<window.innerHeight*0.2};
   if(isCard) cardEl.classList.add('is-moving');
-  window.addEventListener('pointermove',onMove,{passive:false});
-  window.addEventListener('pointerup',onUp);
-  window.addEventListener('pointercancel',onUp);
 }
-function onMove(e){
+function gestureMove(x,y,e){
   if(!g) return;
-  const dx=e.clientX-g.x, dy=e.clientY-g.y;
-  g.lastX=e.clientX;g.lastY=e.clientY;
+  const dx=x-g.x, dy=y-g.y;
+  g.lastX=x;g.lastY=y;
   g.moved=Math.max(g.moved,Math.hypot(dx,dy));
-  if(!g.mode&&g.moved>TH.tapPx){
+  /* 原生滚动真的动过 → 本次手势锁定为滚动，之后不再改判成切卡/搜索 */
+  if(g.scroll&&Math.abs(g.scroll.scrollTop-g.scrollTop0)>2) g.scrollMoved=true;
+  if(!g.mode&&!g.scrollMoved&&g.moved>TH.tapPx){
     if(Math.abs(dy)>Math.abs(dx)*1.2){
       /* 能滚的正文里：纵向不设模式；否则只有「顶部 1/5 起手 + 向下」才进搜索 */
       g.mode=g.scroll?null:((dy>0&&g.fromTop)?'search':null);
@@ -795,27 +803,23 @@ function onMove(e){
     else g.mode=null;
   }
   if(g.mode==='swipe'){
-    e.preventDefault();
+    /* touchmove 必须 preventDefault，否则浏览器可能把这段横向拖动当成滚动/回退手势 */
+    if(e.cancelable) e.preventDefault();
     cardEl.style.transition='none';
     cardEl.style.transform=`translate3d(${dx}px,0,0) rotate(${dx*0.04}deg)`;
   }else if(g.mode==='search'){
-    e.preventDefault();
+    if(e.cancelable) e.preventDefault();
     const d=el('searchSheet');
     if(!d.classList.contains('show')){d.classList.add('show');el('scrim').classList.add('show');renderSearch();}
     d.style.transition='none';
     d.style.transform=`translateY(${Math.max(0,dy-2)}px)`;
   }
 }
-function onUp(e){
-  window.removeEventListener('pointermove',onMove);
-  window.removeEventListener('pointerup',onUp);
-  window.removeEventListener('pointercancel',onUp);
+function gestureEnd(x,y,canceled){
   if(!g) return;
-  /* pointercancel 的 clientX/Y 是 0，用最后一次 pointermove 的坐标结算，
-     否则一个已经划出去的横滑会在浏览器接管手势时被算成「向右猛滑」。 */
-  const canceled=e.type==='pointercancel';
-  const cx=(canceled&&g.lastX!==undefined)?g.lastX:e.clientX;
-  const cy=(canceled&&g.lastY!==undefined)?g.lastY:e.clientY;
+  /* 被取消时坐标不可靠（pointercancel 常为 0），用最后一次 move 的位置结算 */
+  const cx=(canceled&&g.lastX!==undefined)?g.lastX:x;
+  const cy=(canceled&&g.lastY!==undefined)?g.lastY:y;
   const dx=cx-g.x, dy=cy-g.y;
   const dt=Math.max(1,performance.now()-g.t);
   const mode=g.mode, moved=g.moved;
@@ -834,7 +838,8 @@ function onUp(e){
   if(mode==='swipe'){
     const w=cardEl.offsetWidth||1;
     const fast=Math.abs(dx)/dt>TH.swipeVel&&Math.abs(dx)>40;
-    if(Math.abs(dx)>w*TH.swipeRatio||fast){
+    /* 被浏览器/系统取消的手势不结算成切卡 */
+    if(!canceled&&(Math.abs(dx)>w*TH.swipeRatio||fast)){
       /* 保持当前位移，直接飞出：跟手 → 滑出是同一段动作 */
       cardEl.style.transition='none';
       goCard(dx<0?1:-1,true);
@@ -843,7 +848,7 @@ function onUp(e){
       cardEl.style.transform='';
     }
   }else if(mode==='search'){
-    /* 搜索面板只在正常松手时吸附展开：被浏览器接管的手势不唤出面板 */
+    /* 搜索面板只在正常松手时吸附展开：被取消的手势不唤出面板 */
     if(!canceled&&dy>TH.searchPx){
       d.style.transition='transform .34s cubic-bezier(.32,.72,0,1)';
       d.style.transform='translateY(0)';
@@ -859,6 +864,53 @@ function onUp(e){
       },280);
     }
   }
+}
+
+/* ---------- 触摸：touch 事件（主路径） ---------- */
+function onTouchStart(e){
+  if(e.touches.length!==1) return;
+  const t=e.touches[0];
+  gestureStart(t.clientX,t.clientY,e.target,'touch');
+  if(!g) return;
+  window.addEventListener('touchmove',onTouchMove,{passive:false});
+  window.addEventListener('touchend',onTouchEnd);
+  window.addEventListener('touchcancel',onTouchEnd);
+}
+function onTouchMove(e){
+  if(!g||g.src!=='touch') return;
+  const t=e.touches[0];
+  if(!t) return;
+  gestureMove(t.clientX,t.clientY,e);
+}
+function onTouchEnd(e){
+  window.removeEventListener('touchmove',onTouchMove);
+  window.removeEventListener('touchend',onTouchEnd);
+  window.removeEventListener('touchcancel',onTouchEnd);
+  if(!g||g.src!=='touch') return;
+  const t=(e.changedTouches&&e.changedTouches[0])||null;
+  gestureEnd(t?t.clientX:g.x,t?t.clientY:g.y,e.type==='touchcancel');
+}
+document.addEventListener('touchstart',onTouchStart,{passive:true});
+
+/* ---------- 鼠标 / 触控笔：pointer 事件 ---------- */
+function onDown(e){
+  if(e.pointerType==='touch') return;  // 触摸已由 touch 事件接管
+  gestureStart(e.clientX,e.clientY,e.target,'pointer');
+  if(!g) return;
+  window.addEventListener('pointermove',onMove,{passive:false});
+  window.addEventListener('pointerup',onUp);
+  window.addEventListener('pointercancel',onUp);
+}
+function onMove(e){
+  if(!g||g.src!=='pointer') return;
+  gestureMove(e.clientX,e.clientY,e);
+}
+function onUp(e){
+  window.removeEventListener('pointermove',onMove);
+  window.removeEventListener('pointerup',onUp);
+  window.removeEventListener('pointercancel',onUp);
+  if(!g||g.src!=='pointer') return;
+  gestureEnd(e.clientX,e.clientY,e.type==='pointercancel');
 }
 document.addEventListener('pointerdown',onDown);
 cardInner.addEventListener('click',e=>{
