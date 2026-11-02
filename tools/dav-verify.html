@@ -1,0 +1,81 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>t</title></head><body>
+<iframe id="f" src="../index.html" style="width:420px;height:640px"></iframe>
+<pre id="out">running…</pre>
+<script>
+const out=document.getElementById('out');
+const log=[];let pass=0,fail=0;
+function ok(name,cond,extra){(cond?pass++:fail++);log.push((cond?'PASS ':'FAIL ')+name+(extra!==undefined?(' -> '+extra):''));}
+function done(){out.textContent=log.join('\n')+'\n\n通过 '+pass+' / 失败 '+fail;document.title=fail?'FAIL':'DONE';}
+const f=document.getElementById('f');
+const DAV='http://127.0.0.1:8780/';
+const DAV_NOMKCOL='http://127.0.0.1:8781/';
+
+function waitStatus(d,ms){
+  /* 只等终态：「连接中…」「同步中…」是中间态，匹配到它们会误判 */
+  return new Promise(res=>{
+    const t0=Date.now();
+    const tick=()=>{
+      const s=d.getElementById('davStatus').textContent.trim();
+      if(/已同步|失败|连接正常|未填写地址|无法创建目录|请稍候/.test(s)) return res(s);
+      if(Date.now()-t0>ms) return res('TIMEOUT:'+s);
+      setTimeout(tick,100);
+    };
+    tick();
+  });
+}
+function fill(d,url,user,pw,dir){
+  const set=(id,v)=>{const e=d.getElementById(id);e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));};
+  set('davUrl',url);set('davUser',user);set('davPass',pw);set('davDir',dir);
+}
+
+f.onload=async()=>{
+  const w=f.contentWindow,d=w.document,S=()=>w.__fc.store;
+  try{
+    d.getElementById('btnSettings').click();
+    await new Promise(r=>setTimeout(r,200));
+
+    /* ---------- 1. 备份位置显示 ---------- */
+    fill(d,DAV,'demo@example.com','appsecret','flashcards');
+    const path=d.getElementById('davPath').textContent.trim();
+    ok('设置页显示备份位置',path===DAV+'flashcards/flashcards.json',path);
+
+    /* ---------- 2. 测试连接 ---------- */
+    d.getElementById('davTest').click();
+    let st=await waitStatus(d,8000);
+    ok('测试连接返回「连接正常」',st.indexOf('连接正常')>=0,st);
+
+    /* ---------- 3. 首次同步：目录不存在，应自动创建 ---------- */
+    d.getElementById('davSync').click();
+    st=await waitStatus(d,10000);
+    ok('首次同步显示「已同步」',st.indexOf('已同步')>=0,st);
+    const syncAt=S().settings.lastSync;
+
+    /* 服务器上真的有文件吗？ */
+    let remote=null;
+    try{
+      const r=await fetch(DAV+'flashcards/flashcards.json',{headers:{Authorization:'Basic '+btoa('demo@example.com:appsecret')}});
+      if(r.ok) remote=await r.json();
+    }catch(e){}
+    ok('服务器上确实出现了 flashcards.json',!!remote,remote?('cards='+(remote.cards||[]).length):'没有');
+    ok('远端内容含卡片数据',!!remote&&Array.isArray(remote.cards));
+
+    /* ---------- 4. 密码错误：必须报错，不能再说「已同步」 ---------- */
+    fill(d,DAV,'demo@example.com','WRONG-PASSWORD','flashcards');
+    d.getElementById('davSync').click();
+    st=await waitStatus(d,10000);
+    ok('密码错误时提示认证失败',st.indexOf('认证失败')>=0,st);
+    ok('密码错误时不会误报「已同步」',st.indexOf('已同步')<0,st);
+
+    /* ---------- 5. 服务器不支持建目录：必须报出父目录不存在 ---------- */
+    fill(d,DAV_NOMKCOL,'demo@example.com','appsecret','flashcards');
+    d.getElementById('davSync').click();
+    st=await waitStatus(d,10000);
+    ok('目录缺失时报「父目录不存在」',st.indexOf('父目录不存在')>=0,st);
+    ok('目录缺失时不会误报「已同步」',st.indexOf('已同步')<0,st);
+
+    /* ---------- 6. 失败的操作不该改动 lastSync ---------- */
+    ok('失败后 lastSync 没被改动',S().settings.lastSync===syncAt,syncAt+' -> '+S().settings.lastSync);
+  }catch(e){log.push('ERROR: '+e.message+' @ '+(e.stack||'').split('\n')[1]);}
+  done();
+};
+</script></body></html>
