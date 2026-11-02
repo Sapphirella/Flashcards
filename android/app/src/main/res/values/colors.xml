@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与 index.html 里的 bg 变量保持一致 -->
+    <color name="app_bg">#FAF8F5</color>
+    <color name="ic_launcher_background">#2F6F5E</color>
+</resources>

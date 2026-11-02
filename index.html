@@ -1087,6 +1087,25 @@ function davAuth(){
 }
 function davBase(){return ((store.settings.webdav||{}).url||'').replace(/\/+$/,'')}
 function davFile(){const dir=((store.settings.webdav||{}).dir||'flashcards').replace(/^\/+|\/+$/g,'');return davBase()+'/'+dir+'/flashcards.json'}
+/* 请求通道：网页环境直接用 fetch。
+   在 Android 宿主（window.Android 存在）时改走原生 HTTP 桥，
+   以绕开 WebView 对跨域 WebDAV 请求的 CORS 限制。
+   纯网页环境 window.Android 为 undefined，行为与以前完全一致。 */
+async function davFetch(url,opts){
+  opts=opts||{};
+  if(window.Android&&window.Android.davRequest){
+    const raw=window.Android.davRequest(opts.method||'GET',url,JSON.stringify(opts.headers||{}),opts.body||null);
+    const res=JSON.parse(raw);
+    if(res.error) throw new Error(res.error);
+    return {
+      ok:res.status>=200&&res.status<300,
+      status:res.status,
+      json:()=>JSON.parse(res.body),
+      text:()=>res.body
+    };
+  }
+  return fetch(url,opts);
+}
 function setStatus(msg,bad){
   el('davStatus').innerHTML=`<div class="status ${bad?'is-bad':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${bad?'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>':'<path d="M20 6L9 17l-5-5"/>'}</svg><span>${esc(msg)}</span></div>`;
 }
@@ -1094,8 +1113,8 @@ async function davTest(){
   if(!davBase()){setStatus('未填写地址',true);return;}
   setStatus('连接中…');
   try{
-    let r=await fetch(davBase(),{method:'OPTIONS',headers:{Authorization:davAuth()}});
-    if(!r.ok&&r.status!==405){r=await fetch(davBase(),{method:'PROPFIND',headers:{Authorization:davAuth(),Depth:'0'}});}
+    let r=await davFetch(davBase(),{method:'OPTIONS',headers:{Authorization:davAuth()}});
+    if(!r.ok&&r.status!==405){r=await davFetch(davBase(),{method:'PROPFIND',headers:{Authorization:davAuth(),Depth:'0'}});}
     if(r.ok||r.status===207){setStatus('连接正常');}else{setStatus('HTTP '+r.status,true);}
   }catch(e){setStatus('连接失败',true);}
 }
@@ -1104,13 +1123,13 @@ async function davSync(){
   setStatus('同步中…');
   const file=davFile();
   let remote=null;
-  try{const r=await fetch(file,{headers:{Authorization:davAuth()}}); if(r.ok) remote=await r.json();}catch(e){}
+  try{const r=await davFetch(file,{headers:{Authorization:davAuth()}}); if(r.ok) remote=await r.json();}catch(e){}
   if(remote&&(Array.isArray(remote.cards)||Array.isArray(remote.decks))){
     const v2=(Array.isArray(remote.cards)&&Array.isArray(remote.groups))?remote:migrateV1(remote);
     store=mergeStore(store,v2);
   }
   try{
-    await fetch(file,{method:'PUT',headers:{Authorization:davAuth(),'Content-Type':'application/json'},body:JSON.stringify(store)});
+    await davFetch(file,{method:'PUT',headers:{Authorization:davAuth(),'Content-Type':'application/json'},body:JSON.stringify(store)});
     store.settings.lastSync=now();save();
     setStatus('已同步 · '+fmt(now()));
     renderLib();renderStudy();
@@ -1132,6 +1151,14 @@ function show(view){
     el('statGroups').textContent=store.groups.length;
     if(store.settings.lastSync) setStatus('上次同步 '+fmt(store.settings.lastSync));
   }
+}
+/* 关闭最上层的浮层（弹窗 → 星标抽屉 → 卡组菜单）。
+   Android 宿主用它接管返回键：先关浮层，没有浮层可关时再退出应用。 */
+function closeTopOverlay(){
+  if(el('modal').classList.contains('show')){closeModal();return true;}
+  if(el('drawer').classList.contains('show')){closeDrawer();return true;}
+  if(el('deckMenu').classList.contains('show')){closeDeckMenu();return true;}
+  return false;
 }
 
 /* ================= events ================= */
@@ -1244,7 +1271,7 @@ function delCard(id){
 }
 
 document.addEventListener('keydown',e=>{
-  if(e.target.matches('input,textarea,select'))return;
+  if(e.target&&e.target.matches&&e.target.matches('input,textarea,select'))return;
   if(ui.view!=='study')return;
   if(e.key===' '||e.key==='Enter'){e.preventDefault();flip();}
   else if(e.key==='ArrowRight')goCard(1);
@@ -1269,7 +1296,7 @@ if(window.matchMedia){
   if(mq.addEventListener)mq.addEventListener('change',onChange);
 }
 window.__fc={get store(){return store},get ui(){return ui},render:renderStudy,renderLib:renderLib,show:show};
-window.Flashcards={view:()=>ui.view,home:()=>show('study')};
+window.Flashcards={view:()=>ui.view,home:()=>show('study'),back:()=>closeTopOverlay()};
 })();
 </script>
 </body>

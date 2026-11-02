@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主题图标（monochrome）：纯剪影，由系统统一着色 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108"
+    android:tint="#FF000000">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-8">
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M36,29 h36 a7,7 0 0 1 7,7 v36 a7,7 0 0 1 -7,7 h-36 a7,7 0 0 1 -7,-7 v-36 a7,7 0 0 1 7,-7 z" />
+    </group>
+
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M66.0,25.0 L69.1,32.8 L77.4,33.3 L70.9,38.6 L73.1,46.7 L66.0,42.2 L58.9,46.7 L61.1,38.6 L54.6,33.3 L62.9,32.8 Z" />
+</vector>

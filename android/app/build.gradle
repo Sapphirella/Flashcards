@@ -1,0 +1,146 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+
+// ---------------------------------------------------------------------------
+// 把项目根目录的 index.html 与离线字体同步成 APK 的 assets/web/
+//
+// 用 AGP 的 variant API（addGeneratedSourceDirectory）而不是手写 dependsOn：
+// 这样每个构建变体都有自己的任务与输出目录，AGP 自动接线依赖，
+// 不会出现「某个任务读了 syncWebAssets 的产物却没声明依赖」的校验错误。
+// ---------------------------------------------------------------------------
+abstract class SyncWebAssetsTask extends DefaultTask {
+
+    @InputFile
+    @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getIndexHtml()
+
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract DirectoryProperty getFontDir()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDir()
+
+    @TaskAction
+    void sync() {
+        def outDir = outputDir.get().asFile
+        outDir.deleteDir()
+
+        // 注意：addGeneratedSourceDirectory 会把「输出目录的内容」铺到 assets 根下，
+        // 而 AssetServer 读的是 assets/web/。所以这里必须在输出目录里再套一层 web/，
+        // 最终 APK 里才是 assets/web/index.html —— 与离线脚本 build-apk.sh 的布局保持一致。
+        def webOut = new File(outDir, 'web')
+        webOut.mkdirs()
+
+        // 1) 离线字体
+        def fontsOut = new File(webOut, 'fonts')
+        fontsOut.mkdirs()
+        fontDir.get().asFile.listFiles()?.sort { it.name }?.each { f ->
+            if (f.isFile() && (f.name.endsWith('.woff2') || f.name.endsWith('.woff') || f.name.endsWith('.css'))) {
+                // 用 java.nio.file.Files.copy 而不是 Groovy 的 File.copyTo ——
+                // 后者在部分 Gradle/Groovy 组合下解析不到对应的 DefaultGroovyMethods 重载。
+                java.nio.file.Files.copy(
+                        f.toPath(),
+                        new File(fontsOut, f.name).toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+
+        // 2) 页面源码
+        def html = indexHtml.get().asFile.getText('UTF-8')
+
+        // 去掉 Google Fonts 的 CDN 引用：APK 要能完全离线使用
+        html = html.replaceAll('(?m)^[ \\t]*<link[^>]*fonts\\.(googleapis|gstatic)\\.com[^>]*>[ \\t]*\\R?', '')
+
+        // 换成本地字体表（Latin 字体内置，中日韩用系统自带的 Noto CJK）
+        html = html.replaceFirst('<head>', '<head>\n  <link rel="stylesheet" href="fonts/fonts.css">')
+
+        new File(webOut, 'index.html').write(html, 'UTF-8')
+
+        logger.lifecycle("syncWebAssets: ${indexHtml.get().asFile} -> ${webOut}/index.html")
+    }
+}
+
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.amarisgo.flashcards'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.amarisgo.flashcards'
+        minSdk 26
+        targetSdk 35
+        versionCode 2
+        versionName '2.0'
+    }
+
+    signingConfigs {
+        release {
+            // keystore.properties 与 keystore/ 都不入库，见 android/README.md
+            def props = new Properties()
+            def f = rootProject.file('keystore/keystore.properties')
+            if (f.exists()) {
+                f.withInputStream { props.load(it) }
+                storeFile rootProject.file(props.getProperty('storeFile'))
+                storePassword props.getProperty('storePassword')
+                keyAlias props.getProperty('keyAlias')
+                keyPassword props.getProperty('keyPassword')
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
+        release {
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (rootProject.file('keystore/keystore.properties').exists()) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        resources {
+            excludes += ['META-INF/*']
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+// 每个变体一个同步任务：输出目录与变体一一对应
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def taskName = "sync${variant.name.capitalize()}WebAssets"
+        def taskProvider = tasks.register(taskName, SyncWebAssetsTask) {
+            description = '把 index.html 与离线字体同步到 assets/web/'
+            group = 'build'
+            indexHtml.set(rootProject.file('../index.html'))
+            fontDir.set(file('src/main/webfonts'))
+            outputDir.set(layout.buildDirectory.dir("generated/webAssets/${variant.name}"))
+        }
+        variant.sources.assets.addGeneratedSourceDirectory(taskProvider) { it.outputDir }
+    }
+}

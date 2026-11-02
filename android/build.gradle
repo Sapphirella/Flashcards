@@ -1,0 +1,11 @@
+// 闪卡应用 Android 宿主工程
+//
+//   ./gradlew assembleDebug      调试包（自动用 debug 签名，可直接安装）
+//   ./gradlew assembleRelease    正式包（需 keystore/flashcards.jks，见 README）
+//
+// 页面源码不在本工程内：构建时由 syncWebAssets 任务从项目根目录的 index.html 同步进来，
+// 保证「网页版」与「APK 版」共用同一份源文件，不会出现两份代码各自漂移。
+
+plugins {
+    id 'com.android.application' version '8.11.0' apply false
+}
