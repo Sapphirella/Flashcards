@@ -15,7 +15,7 @@
 | 决策 | 原因 |
 | --- | --- |
 | 单文件 | 整个应用就是一个网页，拷走 `index.html` 到任何地方都能用 —— 手机、U 盘、静态托管、离线打开 |
-| 不用框架 | 这个体量（~1276 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
+| 不用框架 | 这个体量（~1303 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
 | localStorage 存数据 | 零后端成本，且离线可用；用 WebDAV 解决多设备同步 |
 | 无构建 | 想改就改，保存刷新即生效，没有 `npm install` 门槛 |
 
@@ -27,14 +27,17 @@
 
 ```
 Flashcards/
-├── index.html          # 全部代码（HTML + CSS + JS，1276 行）
+├── index.html          # 全部代码（HTML + CSS + JS，1303 行）
 ├── README.md           # 项目说明：功能、数据格式、快速开始
 ├── HANDOVER.md         # 本文件
 ├── .gitignore
-└── docs/images/        # README 配图
+├── docs/images/        # README 配图
+└── android/            # Android 宿主工程（WebView 外壳），见 §6.2
 ```
 
 没有 `package.json`、没有 `src/`、没有构建产物。**所有改动都发生在 `index.html` 里。**
+
+> `android/` 是唯一的多文件目录，但它是**宿主的壳**，不是应用代码的所在地 —— APK 里打包的仍然是根目录这一份 `index.html`，构建时同步进去。网页版与 APK 版永远同源。
 
 ---
 
@@ -130,7 +133,7 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 ## 4. 模块地图（带行号）
 
-> 行号对应当前 `index.html`（1276 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
+> 行号对应当前 `index.html`（1303 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
 
 | 分块 | 行 | 要点 |
 | --- | --- | --- |
@@ -154,10 +157,10 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 | group manager | 936 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
 | batch ops | 989 | `batchGroups(mode)` 批量加入/移出卡组 |
 | import/export | 1014 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
-| webdav | 1083 | `davTest` / `davSync` |
-| views | 1120 | `show(view)` 切换视图 |
-| events | 1137 | 所有事件绑定、键盘快捷键 |
-| init | 1256 | 启动：load → applyTheme → render → 首次提示 |
+| webdav | 1083 | `davFetch` / `davTest` / `davSync` |
+| views | 1139 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
+| events | 1164 | 所有事件绑定、键盘快捷键 |
+| init | 1283 | 启动：load → applyTheme → render → 首次提示 |
 
 ### 关键函数速查
 
@@ -240,23 +243,108 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 **合并语义**：卡片和卡组**各自独立**比较 `updatedAt`，谁的 `updatedAt` 大用谁。同一张卡在两台设备上同时被改，仍然会丢一方（last-write-wins），这是有意为之的简化。
 
-### 6.2 Android WebView 宿主
+### 6.2 Android 宿主工程
 
-代码会探测 `window.Android`：
+`android/` 是一套**独立的宿主工程**，把本应用包成可安装的 APK。整个 App = 一个全屏 WebView + 打包进去的**同一份** `index.html`。
 
-| 方法 | 用途 | 降级行为 |
+**它不改变应用架构**：`android/app/src/main/` 里没有一份页面副本，构建时由 Gradle 的 `syncWebAssets` 任务（或离线脚本 `android/tools/prepare-web-assets.sh`）把根目录的 `index.html` 同步到 `assets/web/index.html`，顺带把 Google Fonts 的 CDN 引用换成内置的离线字体。所以「网页版」和「APK 版」永远是同一份源文件，不会各自漂移。
+
+#### 6.2.1 四个 Java 类
+
+| 文件 | 职责 |
+| --- | --- |
+| `MainActivity.java` | 全屏 WebView、加载虚拟源、系统栏 insets 内边距、返回键接管、文件选择器 |
+| `AssetServer.java` | 把 `assets/web/` 映射成虚拟 https 源 `https://flashcards.local/`，含目录穿越防护 |
+| `NativeBridge.java` | `window.Android` 桥：`setStatusBar` / `saveFile` / `davRequest` |
+| `SimpleHttp.java` | 用 Socket 手写 HTTP/1.1 的客户端，**支持任意方法** |
+
+#### 6.2.2 三个关键设计决策
+
+1. **用虚拟 https 源而不是 `file:///android_asset/`。**
+   `file://` 是不透明源，各版本 WebView 对 localStorage 的支持不一致；而 localStorage 是本应用**唯一**的存储手段，一旦不持久化用户就丢卡片。`https://flashcards.local/` 是正常的同源安全上下文，localStorage 稳定可用。
+
+2. **WebDAV 走原生 HTTP 桥而不是 `fetch`。**
+   WebView 里 `fetch` 受同源策略约束，跨域的 WebDAV 服务器不会返回 CORS 头 → 直接被浏览器拦掉。而 `HttpURLConnection.setRequestMethod()` 不接受 `PROPFIND`，所以 `SimpleHttp` 用 `Socket` 手写 HTTP/1.1，请求方法不受限。
+
+3. **能力全部通过 `window.Android` 接入，页面侧改动极小。**
+   `index.html` 里只加了三处：webdav 段的 `davFetch()` 包装（4 个调用点替换）、views 段的 `closeTopOverlay()`、文件末尾的 `window.Flashcards.back()`。**纯网页环境下 `window.Android` 为 undefined，行为与改动前完全一致。**
+
+#### 6.2.3 桥接协议
+
+页面 → 原生：
+
+| 方法 | 参数 | 返回 |
 | --- | --- | --- |
-| `Android.setStatusBar(color, lightIcons)` | 同步状态栏配色 | 无宿主时跳过 |
-| `Android.saveFile(name, content, type)` | 导出文件直接写进「下载」目录 | 回退到 `Blob` + `<a download>` |
+| `Android.setStatusBar(color, lightIcons)` | `#RRGGBB`、布尔 | void（异步切主线程执行） |
+| `Android.saveFile(name, content, type)` | 文件名、文本内容、MIME | void（失败时原生弹 Toast 兜底） |
+| `Android.davRequest(method, url, headersJson, body)` | 方法、URL、JSON 字符串的请求头、请求体 | JSON 字符串：`{"status":207,"body":"..."}` 或 `{"error":"..."}` |
+
+`davFetch()` 把原生返回包装成近似 `fetch` 的对象（只需 `ok` / `status` / `json()` / `text()`），让 `davTest` / `davSync` 的代码在两种环境下一模一样。
+
+原生 → 页面：返回键事件。`MainActivity` 优先调 `window.Flashcards.back()`（关掉最上层的弹窗 / 抽屉 / 菜单）；返回 `false` 说明没有浮层可关，才执行默认的「返回上一层 / 退出」。
+
+#### 6.2.4 构建
+
+两条路径，**产出的 APK 内容一致**（实测 `assets/web/index.html` 逐字节相同）：
+
+```bash
+cd android
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+
+./gradlew assembleRelease     # 正规路径（仓库自带 wrapper，Gradle 8.14.3）
+./build-apk.sh                # 离线路径：只用本机 build-tools + JDK，无需下载 Gradle
+./build-apk.sh --debug        # 离线路径的调试包
+```
+
+`build-apk.sh` 是手写的离线构建：`aapt2 compile/link` → `javac` → `d8` → `aapt add` → `zipalign` → `apksigner`。存在的意义是**在网络受限的环境里也能出包**，不作为日常开发路径。
+
+产物：
+
+| 变体 | Gradle 路径 | 离线脚本路径 | 包名 |
+| --- | --- | --- | --- |
+| 正式 | `app/build/outputs/apk/release/app-release.apk` | `build/manual/out/flashcards-release.apk` | `com.amarisgo.flashcards` |
+| 调试 | `app/build/outputs/apk/debug/app-debug.apk` | `build/manual/out/flashcards-debug.apk` | `com.amarisgo.flashcards.debug` |
+
+配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 2 / versionName 2.0。
+
+- **minSdk 26（Android 8.0）**：这样只需要自适应图标（纯 XML），不必生成 PNG 位图。
+- **targetSdk 35 + 手动应用 systemBars insets 作为 padding**：API 35 强制 edge-to-edge，早期版本系统已内缩窗口、insets 为 0，两者统一处理不会重复留白。
+- **调试包用 `.debug` 后缀**（`applicationIdSuffix`），可与正式包共存对比。
+
+> ⚠️ **APK 里网页资源的目录结构是 `assets/web/`，不是 `assets/` 根目录。**
+> `AssetServer.ASSET_ROOT = "web"`，虚拟源把 `/index.html` 映射到 `assets/web/index.html`。
+> 用 AGP 的 `addGeneratedSourceDirectory` 时，**输出目录的内容会被平铺到 assets 根下**，
+> 所以生成任务必须在输出目录里再套一层 `web/`，否则 APK 装上后是一张白屏（404）。
+> 离线脚本 `prepare-web-assets.sh` 则直接输出到 `assets/web/`，两条路径必须保持一致。
+> 改这块之后，务必用 `unzip -l xxx.apk | grep assets/` 确认目录层级。
+
+#### 6.2.5 签名密钥
+
+密钥在 `android/keystore/`，**已 gitignore，不入库**。仓库里只有生成命令（见 `android/README.md` §4）。
+
+> ⚠️ **换签名密钥 = 必须卸载旧版 = 连同 localStorage 里的卡片数据一起删掉。** 正式发布请另建一把并离线备份。
+
+#### 6.2.6 尚未验证的部分
+
+| 项 | 状态 |
+| --- | --- |
+| 真机安装与运行 | **未验证** —— 构建机上没有 Android 设备，也没有模拟器镜像（SDK 里没有 `emulator` 与 system-images），只做了静态验证（`aapt dump badging` / `apksigner verify` / `zipalign -c` / dex 类检查 / 解包确认 `assets/web/` 目录层级与字体齐全） |
+| Gradle 构建路径 | **已验证** —— `./gradlew assembleRelease assembleDebug` 与离线脚本产出的 `assets/web/index.html` 逐字节相同 |
+| WebDAV 原生桥 | **未在真机验证** —— 网页版的 `fetch` 分支已实测通过，原生分支需要在真机上连一次真实的 WebDAV 服务器才能确认 |
+| 系统栏 insets / 安全区 | **未验证** —— 需要全面屏真机确认边缘到边缘的留白是否合适 |
+
+接手后第一件事建议：装到真机上把 §10.1 的清单重走一遍。
 
 ### 6.3 暴露给宿主的接口
 
 ```js
 window.__fc = { store, ui, render, renderLib, show };   // 调试用
-window.Flashcards = { view: () => ui.view, home: () => show('study') };
+window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () => closeTopOverlay() };
 ```
 
-宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图。
+宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图、`Flashcards.back()` 关闭最上层浮层（弹窗 → 星标抽屉 → 卡组菜单），没有浮层可关时返回 `false`。
+
+`closeTopOverlay()` 在 `index.html:1157`。
 
 ---
 
@@ -272,7 +360,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study') };
 ### 7.2 加一个新视图
 
 1. 加 `<section class="view" id="vYourView">…</section>`，放在 `#app` 内。
-2. 在 `show(view)`（`index.html:1121`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
+2. 在 `show(view)`（`index.html:1140`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
 3. 加 `ui.yourview = ...` 状态。
 4. 记得给 `#app` 里的兄弟 section 留出空间（它们 `display:none`，不占位）。
 
@@ -285,7 +373,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study') };
 
 ### 7.4 加一种卡片操作
 
-批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1219`）和 `batchGroups()`（`index.html:990`）两处。新的批量动作需要在这两处都加分支。
+批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1247`）和 `batchGroups()`（`index.html:990`）两处。新的批量动作需要在这两处都加分支。
 
 ---
 
@@ -298,8 +386,11 @@ window.Flashcards = { view: () => ui.view, home: () => show('study') };
 | 3 | 批量栏在 < 340px 极窄屏下文字截断 | 显示为「加入卡…」 | 已用 `text-overflow:ellipsis` 兜底，功能正常 |
 | 4 | 同一张卡并发修改会丢一方 | WebDAV 同步边缘情况 | last-write-wins 的固有代价 |
 | 5 | 卡片库列表滚动位置在视图切换后保留 | 可能不符合预期 | 与原实现一致，暂未改 |
-| 6 | `index.html` 单文件已达 1276 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
+| 6 | `index.html` 单文件已达 1303 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
 | 7 | 示例数据在首次打开时自动写入 | 打开即有 13 张卡片 | 设计如此，可在「设置 → 清空」重置 |
+| 8 | APK 未做真机安装验证 | 首次装机可能遇到未预料的问题 | 构建机上无设备也无模拟器镜像，只做了静态验证（签名/对齐/badging/资源完整性）；接手后请装真机走一遍 §10.1 |
+| 9 | WebDAV 原生桥未在真机验证 | 原生分支能否真正绕过 CORS 未经证实 | 网页版的 `fetch` 分支已实测通过；原生分支需在真机上连一次真实 WebDAV 服务器才能确认 |
+| 10 | 系统栏 insets / 安全区未在真机验证 | 全面屏机型可能留白不均 | API 35 的 edge-to-edge 处理是按文档实现的，缺真机确认 |
 
 ---
 
@@ -320,7 +411,7 @@ git log --oneline          # 看历史
 <type>(<scope>): <一句话说明>
 
 type:  fix | feat | refactor | docs | chore | style | perf
-scope: library | study | settings | webdav | storage | gestures
+scope: library | study | settings | webdav | storage | gestures | android
 ```
 
 例子：
@@ -328,11 +419,18 @@ scope: library | study | settings | webdav | storage | gestures
 ```
 fix(library): 修复批量操作底栏溢出屏幕外的问题
 feat(study): 增加卡片翻面动画时长设置
+feat(android): 新增 Android 宿主工程与离线构建脚本
 docs: 补充 WebDAV 合并策略说明
 chore: 移除已废弃的 .scroll 工具类
 ```
 
 **建议流程**：一个 bug 一个提交，提交信息里写清「现象 → 根因 → 修复」，方便后来者追溯。改大功能前先开一个分支。
+
+**关于 `android/` 目录**：
+
+- `android/keystore/`（签名密钥）与 `android/local.properties`（SDK 路径）**都不入库**，由 `android/.gitignore` 排除。
+- `android/build/` 是构建产物目录，也被忽略；需要出包时本地跑一次构建脚本即可。
+- `android/app/src/main/webfonts/` 下的 woff2 **要入库** —— 它们是离线字体，改了会被 `syncWebAssets` 打进 APK。
 
 ---
 
@@ -351,8 +449,25 @@ python3 -m http.server 8777   # 在项目根目录
 - [ ] **视口**：375×667（iPhone SE）、390×844（iPhone 14）、768×1024（平板）、桌面宽屏
 - [ ] **控制台**：无报错
 - [ ] **持久化**：刷新页面后卡片、星标、主题都还在
+- [ ] **宿主接口**：`window.Flashcards.back()` 能依次关闭弹窗 / 抽屉 / 菜单，没有浮层时返回 `false`
 
 > 视口切换建议用浏览器的响应式模式，或直接改窗口宽度；`100dvh` 在移动端浏览器地址栏收起/展开时会变，务必在真机或模拟器上再看一眼。
+
+### 10.1 APK 专属清单（装到真机后走一遍）
+
+```bash
+cd android
+./build-apk.sh --debug && adb install -r build/manual/out/flashcards-debug.apk
+```
+
+- [ ] **能装上、能启动**，图标与名称正常（应用名「闪过闪卡」）
+- [ ] **数据持久化**：加两张卡 → 杀掉进程 → 重开，卡片还在（这是虚拟 https 源方案的核心目的）
+- [ ] **返回键**：弹窗打开时返回键关弹窗；抽屉打开时关抽屉；都没有时退出应用
+- [ ] **导出**：导出 JSON 后到系统「下载」目录能找到文件（走 MediaStore，免权限）
+- [ ] **WebDAV**：连一个真实的 WebDAV 服务器，测试连接 + 同步都正常（这条验的是原生 HTTP 桥，不是网页版的 fetch）
+- [ ] **状态栏**：切深浅主题，状态栏配色跟着变
+- [ ] **离线字体**：飞行模式下打开，中文与标题字体都正常（Latin 用内置 woff2，CJK 用系统 Noto CJK）
+- [ ] **安全区**：全面屏机型上，头部不被状态栏压住、底部不被手势条压住
 
 ---
 
@@ -373,11 +488,20 @@ A：见 §1。这是个刻意的一页应用，引入框架的收益远小于破
 **Q：怎么加第二块屏幕 / 桌面版？**
 A：当前是移动优先的单列布局。`.card{width:min(86vw,420px)}` 已经限制了最大宽度，桌面宽屏下不会拉伸变形。要做真正的双栏布局是较大改动，建议开分支做。
 
+**Q：改了根目录的 `index.html`，APK 里没生效？**
+A：APK 里没有页面副本，`syncWebAssets` / `android/tools/prepare-web-assets.sh` 会在构建时从**根目录**那份 `index.html` 派生。确认改的是根目录的文件，然后重新构建。
+
+**Q：装 APK 时提示 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`？**
+A：装的是不同签名的版本。先 `adb uninstall com.amarisgo.flashcards` —— 但卸载会连 localStorage 里的卡片数据一起删掉，**先在应用里导出 JSON 备份**。
+
+**Q：网页版和 APK 版的数据能互通吗？**
+A：不能。两者是各自独立的 localStorage（网页版按域名存，APK 版按 `https://flashcards.local/` 存）。要迁移只能走「导出 JSON → 导入 JSON」。
+
 ---
 
 ## 12. 接手后的第一个建议
 
-先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1276 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
+先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1303 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
 
 读完重点看这几处：
 
@@ -385,5 +509,8 @@ A：当前是移动优先的单列布局。`.card{width:min(86vw,420px)}` 已经
 2. `renderLib()` / `renderStudy()` —— 两个主视图的渲染
 3. `mergeStore()` —— 导入合并与 WebDAV 同步共用的核心
 4. `onDown` / `onMove` / `onUp` —— 手势系统，改动时最容易破坏手感
+5. `davFetch()` / `closeTopOverlay()` —— 两处宿主适配点，改动时要保证纯网页环境行为不变
 
 然后从 README 的「验证清单」走一遍，确认环境正常，就可以动手了。
+
+如果你要动 APK 相关的东西，再花 10 分钟读一遍 `android/README.md` 和本文件 §6.2 —— 那里记了宿主架构、桥接协议和**尚未验证的部分**（真机、Gradle 路径、原生 WebDAV 桥都还没在真机上跑过）。
