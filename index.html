@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-fs="std">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#FAF8F5">
+<title>闪过 Flashcards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FAF8F5; --surface:#FDFBF7; --surface-2:#F4EFE7;
+  --line:#E9E3D6; --line-soft:#F1EBE1;
+  --ink:#1C1C1E; --ink-2:#4C4C52; --muted:#8E8E93;
+  --green:#2F6F5E; --green-deep:#1F4C3F; --green-soft:#E7EFEA; --green-tint:#F1F6F3;
+  --pink:#B06367; --pink-deep:#975054; --pink-soft:#F6E8E9;
+  --shadow-card:0 18px 38px -20px rgba(31,76,63,.30);
+  --shadow-pop:0 24px 48px -22px rgba(31,76,63,.28);
+  --scrim:rgba(28,28,30,.32);
+  --serif:"Noto Serif SC","Source Han Serif SC","Cambria Math","STIX Two Math","Latin Modern Math","DejaVu Sans",serif;
+  --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+  --fs-front:34px; --fs-back:18px;
+}
+[data-theme="dark"]{
+  --bg:#141816; --surface:#1C211F; --surface-2:#232A27;
+  --line:#2E3532; --line-soft:#262D2A;
+  --ink:#E9E7E2; --ink-2:#B8B5AE; --muted:#7E8481;
+  --green:#6FB39A; --green-deep:#9BD0BC; --green-soft:rgba(111,179,154,.16); --green-tint:rgba(111,179,154,.10);
+  --pink:#D98C9A; --pink-deep:#E9AAB4; --pink-soft:rgba(217,140,154,.14);
+  --shadow-card:0 18px 38px -20px rgba(0,0,0,.62);
+  --shadow-pop:0 24px 48px -22px rgba(0,0,0,.66);
+  --scrim:rgba(0,0,0,.55);
+}
+[data-theme="dark"] .btn--primary{color:#0F1A16}
+[data-fs="lg"]{--fs-front:40px;--fs-back:20px}
+[data-fs="xl"]{--fs-front:48px;--fs-back:23px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:var(--sans);font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;overflow:hidden;
+}
+button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+svg{display:block}
+.serif{font-family:var(--serif)}
+.num{font-family:"DM Serif Display",Georgia,serif}
+.mono{font-family:var(--mono)}
+
+#app{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.view{flex:1;display:none;flex-direction:column;min-height:0}
+.view.is-active{display:flex}
+.scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+
+/* ---------- topbar ---------- */
+.topbar{
+  flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(env(safe-area-inset-top) + 10px) 16px 6px;
+}
+.topbar__title{font-family:var(--serif);font-size:17px;font-weight:600}
+.topbar__right{display:flex;gap:4px;flex:none}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:999px;
+  background:var(--surface);border:1px solid var(--line);font-size:13px;max-width:46vw;
+  box-shadow:0 1px 2px rgba(28,28,30,.05);
+}
+.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip svg{width:12px;height:12px;color:var(--green);flex:none}
+.iconbtn{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink-2)}
+.iconbtn:active{background:var(--surface-2)}
+.iconbtn svg{width:18px;height:18px}
+
+/* ---------- study ---------- */
+.stage{flex:1;display:flex;align-items:center;justify-content:center;padding:12px 20px 6px;min-height:0;touch-action:pan-y}
+.card{
+  width:min(86vw,420px);height:60dvh;max-height:560px;position:relative;
+  perspective:1400px;touch-action:none;will-change:transform;
+}
+.card__inner{
+  position:absolute;inset:0;transform-style:preserve-3d;
+  transition:transform .42s cubic-bezier(.2,.8,.2,1);
+}
+.card.is-flipped .card__inner{transform:rotateY(180deg)}
+.card.is-moving .card__inner{transition:none}
+.card.is-out-left{animation:outL .24s cubic-bezier(.32,.02,.6,1) forwards}
+.card.is-out-right{animation:outR .24s cubic-bezier(.32,.02,.6,1) forwards}
+.card.is-fly-up{animation:flyUp .5s cubic-bezier(.3,.7,.3,1) forwards}
+@keyframes outL{to{transform:translate3d(-118%,0,0) rotate(-14deg);opacity:0}}
+@keyframes outR{to{transform:translate3d(118%,0,0) rotate(14deg);opacity:0}}
+@keyframes flyUp{40%{transform:translateY(-18%) scale(.97)}100%{transform:translateY(-120%) scale(.86);opacity:0}}
+.face{
+  position:absolute;inset:0;backface-visibility:hidden;border-radius:18px;
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-card);
+  display:flex;flex-direction:column;padding:20px 20px 16px;overflow:hidden;
+}
+.face--back{transform:rotateY(180deg)}
+.face__top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex:none;font-size:12px;color:var(--muted)}
+.face__body{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:10px 2px}
+.face__body.is-top{align-items:flex-start;justify-content:flex-start}
+.front-text{
+  font-family:var(--serif);font-weight:600;font-size:var(--fs-front);line-height:1.28;
+  text-align:center;letter-spacing:.01em;white-space:pre-wrap;word-break:break-word;
+}
+.back-text{
+  font-family:var(--serif);font-size:var(--fs-back);line-height:1.85;color:var(--ink-2);
+  white-space:pre-wrap;word-break:break-word;width:100%;text-align:left;
+}
+.back-text .hl{color:var(--pink-deep);border-bottom:1px solid var(--pink);padding-bottom:1px}
+.face__foot{
+  flex:none;display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding-top:12px;border-top:1px solid var(--line-soft);font-size:12px;color:var(--muted);
+}
+.tag{
+  display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:999px;
+  background:var(--green-soft);color:var(--green-deep);font-size:11px;font-weight:500;
+  max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.starbtn{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;padding:2px 0}
+.starbtn svg{width:15px;height:15px}
+.starbtn.is-on{color:var(--pink)}
+.starbtn.pop svg{animation:pop .45s cubic-bezier(.3,1.4,.5,1)}
+@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.45)}100%{transform:scale(1)}}
+.footbar{flex:none;padding:6px 20px calc(env(safe-area-inset-bottom) + 12px)}
+.bar{height:3px;border-radius:2px;background:var(--line-soft);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--green);border-radius:2px;transition:width .3s}
+.footbar__row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:7px}
+.hint{
+  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 76px);transform:translateX(-50%);
+  font-size:11.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);
+  padding:7px 14px;border-radius:999px;white-space:nowrap;z-index:40;
+  opacity:0;pointer-events:none;transition:opacity .5s;
+}
+.hint.show{opacity:1}
+
+/* ---------- overlays ---------- */
+.scrim{position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
+.scrim.show{opacity:1;pointer-events:auto}
+.menu{
+  position:fixed;z-index:70;width:222px;max-height:70dvh;overflow:auto;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-pop);
+  padding:6px;opacity:0;transform:translateY(-8px);pointer-events:none;transition:opacity .18s,transform .18s;
+}
+.menu.show{opacity:1;transform:none;pointer-events:auto}
+.menu__head{font-size:11px;color:var(--muted);padding:7px 10px 4px;letter-spacing:.06em}
+.menu__item{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
+  padding:9px 10px;border-radius:9px;font-size:13.5px;color:var(--ink-2);text-align:left;
+}
+.menu__item.is-on{background:var(--green-tint);color:var(--green-deep);font-weight:500}
+.menu__item .ck{width:14px;height:14px;color:var(--green);flex:none}
+.menu__item .n{font-size:11px;color:var(--muted)}
+.menu__sep{height:1px;background:var(--line-soft);margin:5px 8px}
+.menu__item--accent{color:var(--pink-deep);font-weight:500}
+.menu__item svg{width:13px;height:13px}
+
+.drawer{
+  position:fixed;left:0;right:0;top:0;height:auto;max-height:min(74dvh,600px);z-index:60;
+  background:var(--bg);border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;
+  box-shadow:var(--shadow-pop);display:flex;flex-direction:column;
+  transform:translateY(-101%);transition:transform .34s cubic-bezier(.32,.72,0,1);
+}
+.drawer.show{transform:none}
+.drawer__head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--line);flex:none}
+.drawer__head b{font-family:var(--serif);font-size:15px;font-weight:600}
+.drawer__list{flex:0 1 auto;overflow-y:auto}
+.drow{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line-soft)}
+.drow__star{color:var(--pink);flex:none}
+.drow__star svg{width:14px;height:14px}
+.drow__t{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drow__t small{display:block;color:var(--muted);font-size:11px}
+.drow__x{color:var(--muted);width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex:none}
+.drow__x svg{width:13px;height:13px}
+.drawer__foot{flex:none;padding:10px 16px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--line);display:flex;gap:8px}
+
+.modal{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.modal__box{
+  width:min(420px,100%);max-height:86dvh;display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-pop);
+  animation:pop .22s cubic-bezier(.3,1.2,.5,1);
+}
+.modal__head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;flex:none}
+.modal__head b{font-family:var(--serif);font-size:15.5px;font-weight:600}
+.modal__body{padding:6px 16px 4px;overflow-y:auto}
+.modal__foot{display:flex;gap:8px;padding:12px 16px calc(env(safe-area-inset-bottom) + 14px);flex:none}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+.input,textarea.input{
+  width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;
+  font-size:14px;outline:none;resize:vertical;
+}
+.input:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-tint)}
+.btn{height:38px;padding:0 16px;border-radius:999px;font-size:13.5px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid transparent}
+.btn--primary{background:var(--green);color:#fff}
+.btn--ghost{background:var(--bg);border-color:var(--line);color:var(--ink-2)}
+.btn--danger{background:transparent;border-color:var(--pink);color:var(--pink-deep)}
+.btn--block{width:100%}
+.btn svg{width:15px;height:15px}
+.btn:disabled{opacity:.45;cursor:default}
+
+/* ---------- library ---------- */
+.libhead{position:sticky;top:0;z-index:6;background:var(--bg)}
+.libbar{flex:none;display:flex;gap:8px;align-items:center;padding:4px 16px 10px;overflow-x:auto;overflow-y:hidden}
+.libbar::-webkit-scrollbar{display:none}
+.libchips{display:flex;gap:7px;flex:none}
+.cchip{
+  display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 12px;border-radius:999px;
+  background:var(--surface);border:1px solid var(--line);font-size:12.5px;color:var(--ink-2);white-space:nowrap;flex:none;
+}
+.cchip.is-on{background:var(--green);border-color:var(--green);color:#fff}
+.cchip.is-picked{background:var(--green-tint);border-color:var(--green);color:var(--green-deep);font-weight:500}
+.cchip .x{display:inline-flex;width:13px;height:13px;align-items:center;justify-content:center;border-radius:50%;background:rgba(0,0,0,.08)}
+.cchip .x svg{width:9px;height:9px}
+.list{flex:none;overflow:visible;padding:0 16px 12px}
+.lrow{display:flex;gap:11px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line-soft)}
+.lrow__b{flex:1;min-width:0}
+.lrow__f{font-family:var(--serif);font-size:14.5px;line-height:1.5;font-weight:600;word-break:break-word}
+.lrow__k{font-size:12px;color:var(--muted);line-height:1.5;margin-top:3px;word-break:break-word}
+.lrow__k.is-empty{opacity:.5}
+.lrow__g{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.gtag{
+  display:inline-flex;align-items:center;height:19px;padding:0 8px;border-radius:999px;
+  background:var(--green-soft);color:var(--green-deep);font-size:10.5px;
+}
+.gtag.is-none{background:var(--surface-2);color:var(--muted)}
+.lrow__act{display:flex;gap:2px;flex:none;margin-top:-2px}
+.lrow__act button{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.lrow__act button svg{width:14px;height:14px}
+.lrow__act button.is-star{color:var(--pink)}
+.lrow__act button:active{background:var(--surface-2)}
+.ckbox{width:19px;height:19px;border-radius:6px;border:1.5px solid var(--line);flex:none;margin-top:2px;display:flex;align-items:center;justify-content:center}
+.ckbox.is-on{background:var(--green);border-color:var(--green)}
+.ckbox svg{width:12px;height:12px;color:#fff;opacity:0}
+.ckbox.is-on svg{opacity:1}
+.libfoot{position:sticky;bottom:0;z-index:5;flex:none;display:flex;gap:8px;padding:10px 16px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--line);background:var(--bg)}
+.libfoot .btn{flex:1;height:34px;padding:0 10px;font-size:12.5px}
+.batchbar{position:sticky;bottom:0;z-index:5;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:10px 16px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--line);background:var(--bg)}
+.batchbar::-webkit-scrollbar{display:none}
+.batchbar .btn{flex:none;height:34px;font-size:12.5px}
+
+/* ---------- settings ---------- */
+.set{flex:1;min-height:0;overflow-y:auto;padding:0 16px 24px}
+.group{margin-bottom:22px}
+.group__t{font-size:11px;color:var(--muted);letter-spacing:.08em;margin:0 0 8px 2px}
+.rows{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line-soft);min-height:48px}
+.row:last-child{border-bottom:0}
+.row__l{font-size:13.5px;color:var(--ink)}
+.row__v{font-size:12.5px;color:var(--muted);text-align:right}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:999px;padding:3px;gap:2px}
+.seg button{height:28px;padding:0 12px;border-radius:999px;font-size:12.5px;color:var(--ink-2)}
+.seg button.is-on{background:var(--surface);color:var(--green-deep);box-shadow:0 1px 2px rgba(28,28,30,.08);font-weight:500}
+.status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--green-deep);padding:9px 12px;background:var(--green-tint);border-radius:10px;margin-top:8px}
+.status.is-bad{color:var(--pink-deep);background:var(--pink-soft)}
+.status svg{width:13px;height:13px;flex:none}
+.actions{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+.actions:last-child{border-bottom:0}
+.actions .btn{flex:1;min-width:96px;height:34px;font-size:12.5px}
+.rowfield{display:block;padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+.rowfield:last-child{border-bottom:0}
+.rowfield label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+.rowfield .input{background:var(--bg)}
+
+.toast{
+  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 28px);transform:translate(-50%,10px);
+  background:var(--ink);color:var(--bg);font-size:13px;padding:9px 16px;border-radius:999px;
+  opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;z-index:90;max-width:82vw;text-align:center;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.empty{padding:56px 20px;text-align:center;color:var(--muted);font-size:13px}
+.deckrow{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line-soft)}
+.deckrow:last-child{border-bottom:0}
+.deckrow__n{flex:1;font-size:14px}
+.deckrow__c{font-size:11.5px;color:var(--muted)}
+.deckrow button{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.deckrow button svg{width:14px;height:14px}
+.pickrow{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.pickrow .cchip{height:30px}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===== 背诵 ===== -->
+  <section class="view is-active" id="vStudy">
+    <header class="topbar">
+      <button class="chip" id="deckChip"><span id="deckName">全部卡片</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="topbar__right">
+        <button class="iconbtn" id="btnLibrary" aria-label="卡片库">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>
+        </button>
+        <button class="iconbtn" id="btnSettings" aria-label="设置">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="stage" id="stage">
+      <div class="card" id="card">
+        <div class="card__inner" id="cardInner">
+          <div class="face face--front" id="faceFront"></div>
+          <div class="face face--back" id="faceBack"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footbar">
+      <div class="bar"><i id="progBar" style="width:0%"></i></div>
+      <div class="footbar__row"><span id="footLeft"></span><span id="footRight"></span></div>
+    </div>
+  </section>
+
+  <!-- ===== 卡片库 ===== -->
+  <section class="view scroll" id="vLibrary">
+    <div class="libhead">
+      <header class="topbar">
+        <button class="iconbtn" id="libBack" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="topbar__title" id="libTitle">卡片库</span>
+        <div class="topbar__right">
+          <button class="iconbtn" id="libBatch" aria-label="批量管理">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/><path d="M4 6l2 2-2 2"/><path d="M4 16l2 2-2 2"/></svg>
+          </button>
+          <button class="iconbtn" id="libAdd" aria-label="新增卡片">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="libbar"><div class="libchips" id="libChips"></div></div>
+    </div>
+    <div class="list" id="libList"></div>
+
+    <div class="libfoot" id="libFoot">
+      <button class="btn btn--ghost" id="btnImport">导入</button>
+      <button class="btn btn--ghost" id="btnExportJson">导出 JSON</button>
+      <button class="btn btn--ghost" id="btnExportTxt">导出 TXT</button>
+      <button class="btn btn--ghost" id="btnManage">卡组</button>
+    </div>
+    <div class="batchbar" id="batchBar" style="display:none"></div>
+  </section>
+
+  <!-- ===== 设置 ===== -->
+  <section class="view" id="vSettings">
+    <header class="topbar">
+      <button class="iconbtn" id="setBack" aria-label="返回">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="topbar__title">设置</span>
+      <div class="topbar__right"></div>
+    </header>
+
+    <div class="set">
+      <div class="group">
+        <div class="group__t">外观</div>
+        <div class="rows">
+          <div class="row">
+            <span class="row__l">主题</span>
+            <div class="seg" id="segTheme">
+              <button data-v="light">浅色</button><button data-v="dark">深色</button><button data-v="auto">跟随系统</button>
+            </div>
+          </div>
+          <div class="row">
+            <span class="row__l">字号</span>
+            <div class="seg" id="segFs">
+              <button data-v="std">标准</button><button data-v="lg">大</button><button data-v="xl">特大</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group__t">WebDAV</div>
+        <div class="rows">
+          <div class="rowfield"><label>地址</label><input class="input" id="davUrl" placeholder="https://dav.example.com/flashcards"></div>
+          <div class="rowfield"><label>账号</label><input class="input" id="davUser" placeholder="user" autocomplete="username"></div>
+          <div class="rowfield"><label>密码</label><input class="input" id="davPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+          <div class="rowfield"><label>目录</label><input class="input" id="davDir" placeholder="flashcards"></div>
+          <div class="actions">
+            <button class="btn btn--ghost" id="davTest">测试连接</button>
+            <button class="btn btn--primary" id="davSync">立即同步</button>
+          </div>
+          <div id="davStatus"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group__t">数据</div>
+        <div class="rows">
+          <div class="actions">
+            <button class="btn btn--ghost" id="setImport">导入 JSON</button>
+            <button class="btn btn--ghost" id="setExportJson">导出 JSON</button>
+            <button class="btn btn--ghost" id="setExportTxt">导出 TXT</button>
+          </div>
+          <div class="actions">
+            <button class="btn btn--danger" id="setClear">清空全部数据</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group__t">关于</div>
+        <div class="rows">
+          <div class="row"><span class="row__l">版本</span><span class="row__v">2.0</span></div>
+          <div class="row"><span class="row__l">卡片</span><span class="row__v" id="statCards">0</span></div>
+          <div class="row"><span class="row__l">卡组</span><span class="row__v" id="statGroups">0</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="menu" id="deckMenu"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer__head"><b id="drawerTitle">星标</b>
+    <button class="iconbtn" id="drawerClose" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="drawer__list" id="drawerList"></div>
+  <div class="drawer__foot">
+    <button class="btn btn--primary" id="drawerOnly" style="flex:1">只刷星标</button>
+    <button class="btn btn--ghost" id="drawerClear">清空</button>
+  </div>
+</aside>
+
+<div class="modal" id="modal">
+  <div class="modal__box">
+    <div class="modal__head"><b id="modalTitle"></b>
+      <button class="iconbtn" id="modalClose" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal__body" id="modalBody"></div>
+    <div class="modal__foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="hint" id="hint">轻点翻面 · 左右切卡 · 上滑星标 · 下拉抽屉</div>
+<input type="file" id="fileInput" accept=".json,application/json" hidden>
+
+<script>
+(function(){
+'use strict';
+
+/* ================= storage ================= */
+const KEY='flashcards.v2';
+const OLD_KEY='flashcards.v1';
+const HINT_KEY='flashcards.hint.v1';
+let store=null;
+let ui={view:'study',group:'all',index:0,flipped:false,batch:false,sel:new Set(),libGroup:'all'};
+
+function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4)}
+function now(){return Date.now()}
+const $=s=>document.querySelector(s);
+const el=id=>document.getElementById(id);
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function hl(s){return esc(s).replace(/「([^」]*)」/g,'<span class="hl">「$1」</span>')}
+function toast(msg){const t=el('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1700)}
+function fmt(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
+
+/* ================= seed / migrate ================= */
+function seed(){
+  const t=now();
+  const G=(name)=>({id:uid(),name:name,updatedAt:t});
+  const gs={};['古诗文','单词','数理公式','文学常识'].forEach(n=>gs[n]=G(n));
+  const mk=(front,back,star,g)=>({id:uid(),front:front,back:back,starred:!!star,groups:g.map(x=>gs[x].id),createdAt:t,updatedAt:t});
+  const cards=[
+    mk('劝君更尽一杯酒，西出阳关无故人。','请你再干了这一杯吧，向西出了阳关，就再也见不到老朋友了。',true,['古诗文','文学常识']),
+    mk('秦穆公、西发岐山，太山不让土壤。','秦穆公从西边出发到岐山，泰山不排斥每一粒土壤，因此才能成就其大。',true,['古诗文']),
+    mk('岂不可喜兮。','橘树刚强独立，不与群芳争艳，岂不可喜。',false,['古诗文']),
+    mk('渐车帷裳，窈窈兮心伤。','（见《氓》）',false,['古诗文']),
+    mk('abandon','v. 放弃；抛弃；遗弃',false,['单词']),
+    mk('meticulous','adj. 一丝不苟的；细致的',false,['单词']),
+    mk('resilient','adj. 有韧性的；能快速恢复的',false,['单词']),
+    mk('∫ x² dx = x³⁄3 + C','不定积分：结果加一个任意常数 C',true,['数理公式']),
+    mk('∮ P dQ = ∮ Q dP','格林公式（沿闭合曲线）',false,['数理公式']),
+    mk('a² + b² = c²','勾股定理',false,['数理公式']),
+    mk('赎买社稷','《左传》裴注引《史记》：用土地和人民赎回国家',false,['文学常识']),
+    mk('《诗经》六义','风、雅、颂、赋、比、兴',false,['文学常识']),
+    mk('唐宋八大家','韩愈、柳宗元、欧阳修、苏洵、苏轼、苏辙、王安石、曾巩',false,['文学常识'])
+  ];
+  return {version:2,cards:cards,groups:Object.values(gs),settings:{theme:'light',fs:'std',group:'all',webdav:{url:'',user:'',pass:'',dir:'flashcards'}}};
+}
+function migrateV1(v1){
+  const cards=[],groups=[];
+  (v1.decks||[]).forEach(d=>{
+    groups.push({id:d.id,name:d.name,updatedAt:d.updatedAt||now()});
+    (d.cards||[]).forEach(c=>cards.push({id:c.id,front:c.front,back:c.back,starred:!!c.starred,groups:[d.id],createdAt:c.createdAt||now(),updatedAt:c.updatedAt||now()}));
+  });
+  const s=v1.settings||{};
+  return {version:2,cards:cards,groups:groups,settings:Object.assign({},s,{webdav:s.webdav||{url:'',user:'',pass:'',dir:'flashcards'}})};
+}
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(raw){const d=JSON.parse(raw); if(d&&Array.isArray(d.cards)&&Array.isArray(d.groups)) return d;}
+  }catch(e){}
+  try{
+    const old=localStorage.getItem(OLD_KEY);
+    if(old){const v1=JSON.parse(old); const d=migrateV1(v1); save(d); return d;}
+  }catch(e){}
+  const s=seed(); save(s); return s;
+}
+function save(data){
+  try{localStorage.setItem(KEY,JSON.stringify(data||store));}catch(e){}
+}
+
+/* ================= data helpers ================= */
+function groups(){return store.groups}
+function groupById(id){return store.groups.find(g=>g.id===id)}
+function groupName(id){const g=groupById(id);return g?g.name:''}
+function cardsOf(gid){
+  if(gid==='star') return store.cards.filter(c=>c.starred);
+  if(gid==='all') return store.cards.slice();
+  return store.cards.filter(c=>c.groups.indexOf(gid)>=0);
+}
+function groupCount(gid){return cardsOf(gid).length}
+function starCards(){return store.cards.filter(c=>c.starred)}
+function findCard(id){return store.cards.find(c=>c.id===id)}
+function cardGroupNames(c){
+  if(!c.groups||!c.groups.length) return [];
+  return c.groups.map(groupName).filter(Boolean);
+}
+function touchCard(c){c.updatedAt=now()}
+function touchGroup(g){if(g)g.updatedAt=now()}
+function currentLabel(){
+  if(ui.group==='star') return '星标';
+  if(ui.group==='all') return '全部卡片';
+  return groupName(ui.group)||'全部卡片';
+}
+
+/* ================= theme ================= */
+function applyTheme(){
+  const s=store.settings;
+  const sysDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme=s.theme==='auto'?(sysDark?'dark':'light'):s.theme;
+  document.documentElement.setAttribute('data-theme',theme);
+  document.documentElement.setAttribute('data-fs',s.fs||'std');
+  document.querySelector('meta[name=theme-color]').setAttribute('content',theme==='dark'?'#141816':'#FAF8F5');
+  if(window.Android&&window.Android.setStatusBar){
+    try{window.Android.setStatusBar(theme==='dark'?'#141816':'#FAF8F5',theme!=='dark');}catch(e){}
+  }
+  el('segTheme').querySelectorAll('button').forEach(b=>b.classList.toggle('is-on',b.dataset.v===s.theme));
+  el('segFs').querySelectorAll('button').forEach(b=>b.classList.toggle('is-on',b.dataset.v===(s.fs||'std')));
+}
+
+/* ================= study view ================= */
+const cardEl=el('card'), innerEl=el('cardInner');
+
+function renderStudy(){
+  const cards=cardsOf(ui.group);
+  if(ui.index>=cards.length) ui.index=Math.max(0,cards.length-1);
+  if(ui.index<0) ui.index=0;
+  const c=cards[ui.index];
+  const label=currentLabel();
+  el('deckName').textContent=label;
+
+  if(!c){
+    el('faceFront').innerHTML=`<div class="face__top"><span class="tag">${esc(label)}</span><span class="num">0 / 0</span></div>
+      <div class="face__body"><p class="front-text" style="color:var(--muted);font-size:20px">暂无卡片</p></div>
+      <div class="face__foot"><span></span><span></span></div>`;
+    el('faceBack').innerHTML=`<div class="face__top"><span class="tag">答案</span><span class="num">0 / 0</span></div>
+      <div class="face__body"></div><div class="face__foot"><span></span><span></span></div>`;
+  }else{
+    const names=cardGroupNames(c);
+    const src=names.length?names.join(' · '):'未分组';
+    const num=`${ui.index+1} / ${cards.length}`;
+    const starBtn=(on)=>`<button class="starbtn ${on?'is-on':''}" data-star="${c.id}">
+          <svg viewBox="0 0 24 24" fill="${on?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8z"/></svg>
+        </button>`;
+    el('faceFront').innerHTML=`
+      <div class="face__top"><span class="tag">${esc(label)}</span><span class="num">${num}</span></div>
+      <div class="face__body"><p class="front-text">${esc(c.front||'')}</p></div>
+      <div class="face__foot">${starBtn(c.starred)}<span>${esc(src)}</span></div>`;
+    el('faceBack').innerHTML=`
+      <div class="face__top"><span class="tag">答案</span><span class="num">${num}</span></div>
+      <div class="face__body is-top"><p class="back-text">${c.back?hl(c.back):''}</p></div>
+      <div class="face__foot">${starBtn(c.starred)}<span>${esc(src)}</span></div>`;
+  }
+  el('progBar').style.width=cards.length?((ui.index+1)/cards.length*100)+'%':'0%';
+  el('footLeft').textContent=cards.length?`${ui.index+1} / ${cards.length}`:'0 / 0';
+  el('footRight').textContent=`星标 ${starCards().length}`;
+}
+
+function flip(){
+  ui.flipped=!ui.flipped;
+  cardEl.classList.toggle('is-flipped',ui.flipped);
+}
+/* 滑出与换卡：单一连续动作，不回弹、不二次动画 */
+function goCard(dir,animate){
+  const cards=cardsOf(ui.group);
+  if(!cards.length) return;
+  const next=ui.index+dir;
+  if(next<0||next>=cards.length){
+    cardEl.classList.remove('is-out-left','is-out-right');
+    cardEl.style.transition='transform .3s cubic-bezier(.25,.8,.3,1)';
+    cardEl.style.transform='';
+    return;
+  }
+  const commit=()=>{ui.index=next;ui.flipped=false;cardEl.classList.remove('is-flipped');renderStudy();};
+  if(animate){
+    cardEl.style.opacity='0';
+    cardEl.classList.remove('is-out-left','is-out-right');
+    void cardEl.offsetWidth;
+    cardEl.classList.add(dir>0?'is-out-left':'is-out-right');
+    setTimeout(()=>{
+      cardEl.classList.remove('is-out-left','is-out-right');
+      cardEl.style.transform='';
+      cardEl.style.transition='';
+      commit();
+      cardEl.style.opacity='';
+    },235);
+  }else commit();
+}
+function toggleStar(id,force){
+  const c=findCard(id); if(!c) return;
+  const next=(force!==undefined)?force:!c.starred;
+  if(next===c.starred) return;
+  c.starred=next;touchCard(c);save();
+  renderStudy();renderDrawer();
+  if(ui.view==='library')renderLib();
+}
+function starCurrent(){
+  const cards=cardsOf(ui.group);const c=cards[ui.index];if(!c) return;
+  if(c.starred){toast('已在星标');return;}
+  cardEl.classList.add('is-fly-up');
+  setTimeout(()=>{toggleStar(c.id,true);},300);
+  setTimeout(()=>{
+    cardEl.classList.remove('is-fly-up');
+    cardEl.style.transition='';
+    cardEl.style.transform='';
+    renderStudy();
+    document.querySelectorAll('.starbtn').forEach(b=>b.classList.add('pop'));
+    setTimeout(()=>document.querySelectorAll('.starbtn').forEach(b=>b.classList.remove('pop')),480);
+    toast('已加入星标');
+  },520);
+}
+
+/* ================= group menu ================= */
+function openDeckMenu(){
+  const chip=el('deckChip');
+  const r=chip.getBoundingClientRect();
+  const m=el('deckMenu');
+  const items=[];
+  items.push(`<button class="menu__item ${ui.group==='all'?'is-on':''}" data-g="all">
+    <span>全部卡片</span>${ui.group==='all'?'<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>':'<span class="n">'+groupCount('all')+'</span>'}</button>`);
+  items.push(`<button class="menu__item ${ui.group==='star'?'is-on':''}" data-g="star">
+    <span>星标</span>${ui.group==='star'?'<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>':'<span class="n">'+groupCount('star')+'</span>'}</button>`);
+  items.push(`<div class="menu__sep"></div>`);
+  items.push(`<div class="menu__head">卡组</div>`);
+  store.groups.forEach(g=>{
+    const on=ui.group===g.id;
+    items.push(`<button class="menu__item ${on?'is-on':''}" data-g="${g.id}">
+      <span>${esc(g.name)}</span>${on?'<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>':'<span class="n">'+groupCount(g.id)+'</span>'}</button>`);
+  });
+  items.push(`<div class="menu__sep"></div>`);
+  items.push(`<button class="menu__item menu__item--accent" data-act="newgroup"><span>＋ 新建卡组</span></button>`);
+  items.push(`<button class="menu__item" data-act="manage"><span>管理卡组</span></button>`);
+  m.innerHTML=items.join('');
+  m.style.left=Math.max(12,Math.min(r.left,window.innerWidth-234))+'px';
+  m.style.top=(r.bottom+8)+'px';
+  m.classList.add('show');
+  el('scrim').classList.add('show');
+}
+function closeDeckMenu(){
+  el('deckMenu').classList.remove('show');
+  if(!el('drawer').classList.contains('show')) el('scrim').classList.remove('show');
+}
+
+/* ================= star drawer ================= */
+function renderDrawer(){
+  const list=starCards();
+  el('drawerTitle').textContent=`星标 · ${list.length}`;
+  el('drawerList').innerHTML=list.length?list.map(c=>`
+    <div class="drow">
+      <span class="drow__star"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8z"/></svg></span>
+      <span class="drow__t">${esc(c.front||'')}<small>${esc(cardGroupNames(c).join(' · ')||'未分组')}</small></span>
+      <button class="drow__x" data-unstar="${c.id}" aria-label="移出星标"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>`).join(''):`<div class="empty">暂无星标</div>`;
+}
+function openDrawer(){
+  renderDrawer();
+  el('drawer').classList.add('show');
+  el('scrim').classList.add('show');
+}
+function closeDrawer(){
+  el('drawer').classList.remove('show');
+  if(!el('deckMenu').classList.contains('show')) el('scrim').classList.remove('show');
+}
+
+/* ================= gestures ================= */
+let g=null, lastMoved=0;
+const TH={swipeRatio:.28,swipeVel:.5,starPx:64,drawerPx:80,tapPx:8};
+
+function onDown(e){
+  if(e.target.closest('button,input,textarea,a,.menu,.modal,.drawer,.libfoot,.batchbar,.topbar,.set,.libbar')) return;
+  if(ui.view!=='study') return;
+  const isCard=cardEl.contains(e.target);
+  g={x:e.clientX,y:e.clientY,t:performance.now(),mode:null,isCard:isCard,moved:0};
+  if(isCard) cardEl.classList.add('is-moving');
+  window.addEventListener('pointermove',onMove,{passive:false});
+  window.addEventListener('pointerup',onUp);
+  window.addEventListener('pointercancel',onUp);
+}
+function onMove(e){
+  if(!g) return;
+  const dx=e.clientX-g.x, dy=e.clientY-g.y;
+  g.moved=Math.max(g.moved,Math.hypot(dx,dy));
+  if(!g.mode&&g.moved>TH.tapPx){
+    if(Math.abs(dy)>Math.abs(dx)*1.2) g.mode=dy<0?'star':'drawer';
+    else if(Math.abs(dx)>Math.abs(dy)*1.2) g.mode=g.isCard?'swipe':null;
+    else g.mode=null;
+  }
+  if(g.mode==='swipe'){
+    e.preventDefault();
+    cardEl.style.transition='none';
+    cardEl.style.transform=`translate3d(${dx}px,0,0) rotate(${dx*0.04}deg)`;
+  }else if(g.mode==='star'){
+    e.preventDefault();
+    const y=Math.max(dy,-130);
+    cardEl.style.transition='none';
+    cardEl.style.transform=`translate3d(0,${y}px,0) scale(${1+y/700})`;
+  }else if(g.mode==='drawer'){
+    e.preventDefault();
+    const d=el('drawer');
+    if(!d.classList.contains('show')){d.classList.add('show');el('scrim').classList.add('show');renderDrawer();}
+    d.style.transition='none';
+    d.style.transform=`translateY(${Math.max(0,dy-2)}px)`;
+  }
+}
+function onUp(e){
+  window.removeEventListener('pointermove',onMove);
+  window.removeEventListener('pointerup',onUp);
+  window.removeEventListener('pointercancel',onUp);
+  if(!g) return;
+  const dx=e.clientX-g.x, dy=e.clientY-g.y;
+  const dt=Math.max(1,performance.now()-g.t);
+  const mode=g.mode, moved=g.moved;
+  lastMoved=moved;
+  g=null;
+  cardEl.classList.remove('is-moving');
+  const d=el('drawer');
+
+  if(!mode){
+    cardEl.style.transition='transform .3s cubic-bezier(.25,.8,.3,1)';
+    cardEl.style.transform='';
+    return;
+  }
+  if(mode==='swipe'){
+    const w=cardEl.offsetWidth||1;
+    const fast=Math.abs(dx)/dt>TH.swipeVel&&Math.abs(dx)>40;
+    if(Math.abs(dx)>w*TH.swipeRatio||fast){
+      /* 保持当前位移，直接飞出：跟手 → 滑出是同一段动作 */
+      cardEl.style.transition='none';
+      goCard(dx<0?1:-1,true);
+    }else{
+      cardEl.style.transition='transform .28s cubic-bezier(.25,.8,.3,1)';
+      cardEl.style.transform='';
+    }
+  }else if(mode==='star'){
+    if(dy<-TH.starPx){
+      cardEl.style.transition='none';
+      starCurrent();
+    }else{
+      cardEl.style.transition='transform .28s cubic-bezier(.25,.8,.3,1)';
+      cardEl.style.transform='';
+    }
+  }else if(mode==='drawer'){
+    if(dy>TH.drawerPx){
+      d.style.transition='transform .34s cubic-bezier(.32,.72,0,1)';
+      d.style.transform='translateY(0)';
+      setTimeout(()=>{d.style.transition='';d.style.transform='';},360);
+    }else{
+      d.style.transition='transform .26s ease';
+      d.style.transform='translateY(-101%)';
+      setTimeout(()=>{
+        d.classList.remove('show');d.style.transition='';d.style.transform='';
+        if(!el('deckMenu').classList.contains('show')) el('scrim').classList.remove('show');
+      },280);
+    }
+  }
+}
+document.addEventListener('pointerdown',onDown);
+cardInner.addEventListener('click',e=>{
+  if(e.target.closest('.starbtn')) return;
+  if(lastMoved>TH.tapPx) return;
+  flip();
+});
+document.addEventListener('click',e=>{
+  const sb=e.target.closest('[data-star]');
+  if(sb){toggleStar(sb.dataset.star);return;}
+  const un=e.target.closest('[data-unstar]');
+  if(un){toggleStar(un.dataset.unstar,false);renderDrawer();return;}
+});
+
+/* ================= library ================= */
+function renderLib(){
+  const chips=[`<button class="cchip ${ui.libGroup==='all'?'is-on':''}" data-lg="all">全部卡片</button>`];
+  store.groups.forEach(g=>{
+    chips.push(`<button class="cchip ${ui.libGroup===g.id?'is-on':''}" data-lg="${g.id}">${esc(g.name)}</button>`);
+  });
+  el('libChips').innerHTML=chips.join('');
+
+  const rows=cardsOf(ui.libGroup);
+  if(ui.batch){
+    el('libList').innerHTML=rows.length?rows.map(c=>`
+      <div class="lrow">
+        <button class="ckbox ${ui.sel.has(c.id)?'is-on':''}" data-sel="${c.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></button>
+        <div class="lrow__b">
+          <div class="lrow__f">${esc(c.front||'')}</div>
+          <div class="lrow__k ${c.back?'':'is-empty'}">${esc(c.back||'—')}</div>
+        </div>
+      </div>`).join(''):`<div class="empty">暂无卡片</div>`;
+  }else{
+    el('libList').innerHTML=rows.length?rows.map(c=>{
+      const names=cardGroupNames(c);
+      const tags=names.length?names.map(n=>`<span class="gtag">${esc(n)}</span>`).join(''):`<span class="gtag is-none">未分组</span>`;
+      return `<div class="lrow">
+        <div class="lrow__b">
+          <div class="lrow__f">${esc(c.front||'')}</div>
+          <div class="lrow__k ${c.back?'':'is-empty'}">${esc(c.back||'—')}</div>
+          <div class="lrow__g">${tags}</div>
+        </div>
+        <div class="lrow__act">
+          <button class="${c.starred?'is-star':''}" data-star="${c.id}" aria-label="星标"><svg viewBox="0 0 24 24" fill="${c.starred?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8z"/></svg></button>
+          <button data-edit="${c.id}" aria-label="编辑"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+          <button data-del="${c.id}" aria-label="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+        </div>
+      </div>`;}).join(''):`<div class="empty">暂无卡片</div>`;
+  }
+  el('libTitle').textContent=ui.batch?`已选 ${ui.sel.size}`:'卡片库';
+  el('libFoot').style.display=ui.batch?'none':'flex';
+  el('batchBar').style.display=ui.batch?'flex':'none';
+  if(ui.batch){
+    el('batchBar').innerHTML=`
+      <button class="btn btn--ghost" data-b="all">全选</button>
+      <button class="btn btn--ghost" data-b="add">加入卡组</button>
+      <button class="btn btn--ghost" data-b="remove">移出卡组</button>
+      <button class="btn btn--danger" data-b="del">删除</button>
+      <button class="btn btn--ghost" data-b="exit">退出</button>`;
+  }
+}
+
+/* ================= modal ================= */
+let modalOnClose=null;
+function openModal(title,bodyHTML,buttons,onClose){
+  el('modalTitle').textContent=title;
+  el('modalBody').innerHTML=bodyHTML;
+  el('modalFoot').innerHTML='';
+  buttons.forEach(b=>{
+    const btn=document.createElement('button');
+    btn.className='btn '+(b.cls||'btn--ghost');
+    btn.textContent=b.text;
+    btn.style.flex=b.flex||'1';
+    btn.onclick=()=>{ if(b.fn&&b.fn()===false) return; closeModal(); };
+    el('modalFoot').appendChild(btn);
+  });
+  modalOnClose=onClose||null;
+  el('modal').classList.add('show');
+  el('scrim').classList.add('show');
+  setTimeout(()=>{const f=el('modalBody').querySelector('input,textarea');if(f)f.focus();},60);
+}
+function closeModal(){
+  el('modal').classList.remove('show');
+  if(modalOnClose){const f=modalOnClose;modalOnClose=null;f();}
+  if(!el('drawer').classList.contains('show')&&!el('deckMenu').classList.contains('show')) el('scrim').classList.remove('show');
+}
+el('modalBody').addEventListener('click',e=>{
+  const ren=e.target.closest('[data-ren]');
+  if(ren){renameGroup(ren.dataset.ren);return;}
+  const dd=e.target.closest('[data-gdel]');
+  if(dd){delGroup(dd.dataset.gdel);return;}
+  const pk=e.target.closest('[data-pick]');
+  if(pk){pk.classList.toggle('is-picked');return;}
+});
+el('modalClose').onclick=closeModal;
+el('modal').addEventListener('click',e=>{if(e.target===el('modal'))closeModal()});
+
+/* ================= card editor ================= */
+function groupPicker(selected,idPrefix){
+  const chips=store.groups.map(g=>`
+    <button class="cchip ${selected.indexOf(g.id)>=0?'is-picked':''}" data-pick="${g.id}" data-pk="${idPrefix}">${esc(g.name)}</button>`).join('');
+  return `<div class="pickrow" id="${idPrefix}">${chips||'<span class="dim">暂无卡组</span>'}</div>
+    <input class="input" id="${idPrefix}New" placeholder="新建卡组" style="margin-bottom:12px">`;
+}
+function pickedGroups(prefix){
+  const ids=[];
+  document.querySelectorAll(`#${prefix} [data-pick].is-picked`).forEach(el=>ids.push(el.dataset.pick));
+  return ids;
+}
+function editCard(cardId,presetGroups){
+  const c=cardId?findCard(cardId):null;
+  const isNew=!c;
+  const cur=c||{id:uid(),front:'',back:'',groups:(presetGroups||[]).slice()};
+  const sel=cur.groups||[];
+  openModal(isNew?'新增卡片':'编辑卡片',`
+    <div class="field"><label>正面</label><textarea class="input" id="edFront" rows="3" placeholder="正面">${esc(cur.front)}</textarea></div>
+    <div class="field"><label>背面</label><textarea class="input" id="edBack" rows="5" placeholder="背面">${esc(cur.back)}</textarea></div>
+    <div class="field"><label>卡组</label>${groupPicker(sel,'edGroups')}</div>
+  `,[
+    {text:'取消'},
+    {text:'保存',cls:'btn--primary',fn:()=>{
+      const front=el('edFront').value.trim();
+      const back=el('edBack').value.trim();
+      if(!front){toast('正面不能为空');return false;}
+      const gs=pickedGroups('edGroups');
+      const nn=el('edGroupsNew').value.trim();
+      if(nn){
+        const g={id:uid(),name:nn,updatedAt:now()};
+        store.groups.push(g); gs.push(g.id);
+      }
+      if(isNew){
+        store.cards.push({id:cur.id,front:front,back:back,starred:false,groups:gs,createdAt:now(),updatedAt:now()});
+      }else{
+        c.front=front;c.back=back;c.groups=gs;touchCard(c);
+      }
+      save();renderLib();renderStudy();
+    }}
+  ]);
+}
+
+/* ================= group manager ================= */
+function manageGroups(){
+  const rows=store.groups.map(g=>`
+    <div class="deckrow">
+      <span class="deckrow__n">${esc(g.name)}</span>
+      <span class="deckrow__c">${groupCount(g.id)}</span>
+      <button data-ren="${g.id}" aria-label="重命名"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+      <button data-gdel="${g.id}" aria-label="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+    </div>`).join('');
+  openModal('管理卡组',`<div class="rows" style="border:0">${rows||'<div class="empty">暂无卡组</div>'}</div>`,[
+    {text:'新建卡组',cls:'btn--primary',fn:()=>{setTimeout(newGroup,180);}},
+    {text:'完成'}
+  ]);
+}
+function newGroup(){
+  openModal('新建卡组',`<div class="field"><label>名称</label><input class="input" id="ngName" placeholder="如：英语四级"></div>`,[
+    {text:'取消'},
+    {text:'创建',cls:'btn--primary',fn:()=>{
+      const n=el('ngName').value.trim();
+      if(!n){toast('名称不能为空');return false;}
+      store.groups.push({id:uid(),name:n,updatedAt:now()});
+      save();renderLib();renderStudy();toast('已创建');
+    }}
+  ]);
+}
+function renameGroup(id){
+  const g=groupById(id);if(!g)return;
+  openModal('重命名卡组',`<div class="field"><label>名称</label><input class="input" id="rgName" value="${esc(g.name)}"></div>`,[
+    {text:'取消'},
+    {text:'保存',cls:'btn--primary',fn:()=>{
+      const n=el('rgName').value.trim();
+      if(!n){toast('名称不能为空');return false;}
+      g.name=n;touchGroup(g);save();renderLib();renderStudy();
+      setTimeout(manageGroups,60);return false;
+    }}
+  ]);
+}
+function delGroup(id){
+  const g=groupById(id);if(!g)return;
+  const n=groupCount(id);
+  openModal('删除卡组',`<p style="font-size:13.5px;color:var(--ink-2)">${esc(g.name)} · ${n} 张卡片将移出该卡组</p>`,[
+    {text:'取消'},
+    {text:'删除',cls:'btn--danger',fn:()=>{
+      store.groups=store.groups.filter(x=>x.id!==id);
+      store.cards.forEach(c=>{c.groups=c.groups.filter(x=>x!==id);touchCard(c);});
+      if(ui.group===id){ui.group='all';ui.index=0;store.settings.group='all';}
+      if(ui.libGroup===id) ui.libGroup='all';
+      save();renderLib();renderStudy();toast('已删除');
+      setTimeout(manageGroups,60);return false;
+    }}
+  ]);
+}
+
+/* ================= batch group ops ================= */
+function batchGroups(mode){
+  const selIds=[...ui.sel];
+  const pre=mode==='add'?[]:[];
+  openModal(mode==='add'?'加入卡组':'移出卡组',`
+    ${groupPicker(pre,'bgGroups')}
+    <input class="input" id="bgNew" placeholder="新建卡组">
+  `,[
+    {text:'取消'},
+    {text:'确定',cls:'btn--primary',fn:()=>{
+      const gs=pickedGroups('bgGroups');
+      const nn=el('bgNew').value.trim();
+      if(nn){const g={id:uid(),name:nn,updatedAt:now()};store.groups.push(g);gs.push(g.id);}
+      if(!gs.length) return false;
+      store.cards.forEach(c=>{
+        if(!ui.sel.has(c.id)) return;
+        if(mode==='add') gs.forEach(gid=>{if(c.groups.indexOf(gid)<0)c.groups.push(gid);});
+        else c.groups=c.groups.filter(gid=>gs.indexOf(gid)<0);
+        touchCard(c);
+      });
+      save();ui.sel.clear();renderLib();renderStudy();
+    }}
+  ]);
+}
+
+/* ================= import / export ================= */
+function download(name,content,type){
+  if(window.Android&&window.Android.saveFile){
+    try{window.Android.saveFile(name,content,type||'application/json');toast('已保存到「下载」');return;}catch(e){}
+  }
+  const blob=new Blob([content],{type:type||'application/json;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},400);
+}
+function exportJson(){download('flashcards-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(store,null,2));toast('已导出 JSON')}
+function exportTxt(){
+  let out='';
+  store.groups.forEach(g=>{
+    const cs=store.cards.filter(c=>c.groups.indexOf(g.id)>=0);
+    if(!cs.length) return;
+    out+=`# ${g.name}\n`;
+    cs.forEach(c=>{out+=`【正面】${c.front||''}\n【背面】${c.back||''}\n\n`;});
+  });
+  const none=store.cards.filter(c=>!c.groups.length);
+  if(none.length){
+    out+='# 未分组\n';
+    none.forEach(c=>{out+=`【正面】${c.front||''}\n【背面】${c.back||''}\n\n`;});
+  }
+  download('flashcards-'+new Date().toISOString().slice(0,10)+'.txt',out,'text/plain;charset=utf-8');
+  toast('已导出 TXT');
+}
+function mergeStore(local,remote){
+  const out=JSON.parse(JSON.stringify(local));
+  (remote.groups||[]).forEach(rg=>{
+    const lg=out.groups.find(g=>g.id===rg.id);
+    if(!lg){out.groups.push(JSON.parse(JSON.stringify(rg)));return;}
+    if((rg.updatedAt||0)>(lg.updatedAt||0)){lg.name=rg.name;lg.updatedAt=rg.updatedAt;}
+  });
+  (remote.cards||[]).forEach(rc=>{
+    const lc=out.cards.find(c=>c.id===rc.id);
+    if(!lc){out.cards.push(JSON.parse(JSON.stringify(rc)));return;}
+    if((rc.updatedAt||0)>(lc.updatedAt||0)){
+      lc.front=rc.front;lc.back=rc.back;lc.starred=!!rc.starred;lc.groups=(rc.groups||[]).slice();lc.updatedAt=rc.updatedAt;
+    }
+  });
+  return out;
+}
+function importJson(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    let data;
+    try{data=JSON.parse(r.result);}catch(e){toast('文件格式错误');return;}
+    let v2=null;
+    if(data&&Array.isArray(data.cards)&&Array.isArray(data.groups)) v2=data;
+    else if(data&&Array.isArray(data.decks)) v2=migrateV1(data);
+    if(!v2){toast('文件格式错误');return;}
+    openModal('导入',`<p style="font-size:13.5px;color:var(--ink-2)">${v2.cards.length} 张卡片 · ${v2.groups.length} 个卡组</p>`,[
+      {text:'覆盖',cls:'btn--danger',fn:()=>{
+        store.cards=v2.cards;store.groups=v2.groups;
+        save();renderLib();renderStudy();toast('已覆盖导入');
+      }},
+      {text:'合并',cls:'btn--primary',fn:()=>{
+        store=mergeStore(store,v2);
+        save();renderLib();renderStudy();toast('已合并导入');
+      }}
+    ]);
+  };
+  r.readAsText(file);
+}
+el('fileInput').addEventListener('change',e=>{
+  const f=e.target.files[0];if(f)importJson(f);e.target.value='';
+});
+
+/* ================= webdav ================= */
+function davAuth(){
+  const w=store.settings.webdav||{};
+  return 'Basic '+btoa(unescape(encodeURIComponent((w.user||'')+':'+(w.pass||''))));
+}
+function davBase(){return ((store.settings.webdav||{}).url||'').replace(/\/+$/,'')}
+function davFile(){const dir=((store.settings.webdav||{}).dir||'flashcards').replace(/^\/+|\/+$/g,'');return davBase()+'/'+dir+'/flashcards.json'}
+function setStatus(msg,bad){
+  el('davStatus').innerHTML=`<div class="status ${bad?'is-bad':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${bad?'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>':'<path d="M20 6L9 17l-5-5"/>'}</svg><span>${esc(msg)}</span></div>`;
+}
+async function davTest(){
+  if(!davBase()){setStatus('未填写地址',true);return;}
+  setStatus('连接中…');
+  try{
+    let r=await fetch(davBase(),{method:'OPTIONS',headers:{Authorization:davAuth()}});
+    if(!r.ok&&r.status!==405){r=await fetch(davBase(),{method:'PROPFIND',headers:{Authorization:davAuth(),Depth:'0'}});}
+    if(r.ok||r.status===207){setStatus('连接正常');}else{setStatus('HTTP '+r.status,true);}
+  }catch(e){setStatus('连接失败',true);}
+}
+async function davSync(){
+  if(!davBase()){setStatus('未填写地址',true);return;}
+  setStatus('同步中…');
+  const file=davFile();
+  let remote=null;
+  try{const r=await fetch(file,{headers:{Authorization:davAuth()}}); if(r.ok) remote=await r.json();}catch(e){}
+  if(remote&&(Array.isArray(remote.cards)||Array.isArray(remote.decks))){
+    const v2=(Array.isArray(remote.cards)&&Array.isArray(remote.groups))?remote:migrateV1(remote);
+    store=mergeStore(store,v2);
+  }
+  try{
+    await fetch(file,{method:'PUT',headers:{Authorization:davAuth(),'Content-Type':'application/json'},body:JSON.stringify(store)});
+    store.settings.lastSync=now();save();
+    setStatus('已同步 · '+fmt(now()));
+    renderLib();renderStudy();
+  }catch(e){setStatus('上传失败',true);}
+}
+
+/* ================= views ================= */
+function show(view){
+  ui.view=view;
+  el('vStudy').classList.toggle('is-active',view==='study');
+  el('vLibrary').classList.toggle('is-active',view==='library');
+  el('vSettings').classList.toggle('is-active',view==='settings');
+  window.scrollTo(0,0);
+  if(view==='library') renderLib();
+  if(view==='settings'){
+    const w=store.settings.webdav||{};
+    el('davUrl').value=w.url||'';el('davUser').value=w.user||'';el('davPass').value=w.pass||'';el('davDir').value=w.dir||'';
+    el('statCards').textContent=store.cards.length;
+    el('statGroups').textContent=store.groups.length;
+    if(store.settings.lastSync) setStatus('上次同步 '+fmt(store.settings.lastSync));
+  }
+}
+
+/* ================= events ================= */
+el('deckChip').onclick=e=>{e.stopPropagation();openDeckMenu()};
+el('btnLibrary').onclick=()=>{ui.libGroup=ui.group==='star'?'all':ui.group;ui.batch=false;ui.sel.clear();show('library')};
+el('btnSettings').onclick=()=>show('settings');
+el('libBack').onclick=()=>show('study');
+el('setBack').onclick=()=>show('study');
+el('scrim').onclick=()=>{closeDeckMenu();closeDrawer();};
+el('drawerClose').onclick=closeDrawer;
+el('drawerClear').onclick=()=>{
+  starCards().forEach(c=>{c.starred=false;touchCard(c);});
+  save();renderDrawer();renderStudy();toast('已清空星标');
+};
+el('drawerOnly').onclick=()=>{
+  ui.group='star';ui.index=0;ui.flipped=false;store.settings.group='star';save();
+  cardEl.classList.remove('is-flipped');
+  closeDrawer();show('study');renderStudy();
+};
+el('libAdd').onclick=()=>{
+  const preset=(ui.libGroup&&ui.libGroup!=='all'&&ui.libGroup!=='star')?[ui.libGroup]:[];
+  editCard(null,preset);
+};
+el('libBatch').onclick=()=>{ui.batch=!ui.batch;ui.sel.clear();renderLib()};
+el('btnImport').onclick=()=>el('fileInput').click();
+el('btnExportJson').onclick=exportJson;
+el('btnExportTxt').onclick=exportTxt;
+el('btnManage').onclick=manageGroups;
+el('setImport').onclick=()=>el('fileInput').click();
+el('setExportJson').onclick=exportJson;
+el('setExportTxt').onclick=exportTxt;
+el('setClear').onclick=()=>{
+  openModal('清空数据','',[{text:'取消'},{text:'清空',cls:'btn--danger',fn:()=>{
+    localStorage.removeItem(KEY);localStorage.removeItem(OLD_KEY);
+    store=seed();save();renderStudy();renderLib();toast('已清空');
+  }}]);
+};
+el('davTest').onclick=davTest;
+el('davSync').onclick=davSync;
+['davUrl','davUser','davPass','davDir'].forEach(id=>{
+  el(id).addEventListener('input',()=>{
+    store.settings.webdav=store.settings.webdav||{};
+    store.settings.webdav.url=el('davUrl').value.trim();
+    store.settings.webdav.user=el('davUser').value;
+    store.settings.webdav.pass=el('davPass').value;
+    store.settings.webdav.dir=el('davDir').value.trim()||'flashcards';
+    save();
+  });
+});
+el('segTheme').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  store.settings.theme=b.dataset.v;save();applyTheme();
+});
+el('segFs').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  store.settings.fs=b.dataset.v;save();applyTheme();
+});
+el('deckMenu').addEventListener('click',e=>{
+  const g=e.target.closest('[data-g]');
+  if(g){
+    ui.group=g.dataset.g;ui.index=0;ui.flipped=false;
+    store.settings.group=ui.group;save();
+    cardEl.classList.remove('is-flipped');
+    closeDeckMenu();renderStudy();return;
+  }
+  const a=e.target.closest('[data-act]');
+  if(a){
+    closeDeckMenu();
+    if(a.dataset.act==='newgroup')setTimeout(newGroup,160);
+    if(a.dataset.act==='manage')setTimeout(manageGroups,160);
+  }
+});
+el('libChips').addEventListener('click',e=>{
+  const b=e.target.closest('[data-lg]');if(!b)return;
+  ui.libGroup=b.dataset.lg;renderLib();
+});
+el('libList').addEventListener('click',e=>{
+  const sel=e.target.closest('[data-sel]');
+  if(sel){const id=sel.dataset.sel;ui.sel.has(id)?ui.sel.delete(id):ui.sel.add(id);renderLib();return;}
+  const ed=e.target.closest('[data-edit]');
+  if(ed){editCard(ed.dataset.edit);return;}
+  const dl=e.target.closest('[data-del]');
+  if(dl){delCard(dl.dataset.del);return;}
+});
+el('batchBar').addEventListener('click',e=>{
+  const b=e.target.closest('[data-b]');if(!b)return;
+  const act=b.dataset.b;
+  if(act==='exit'){ui.batch=false;ui.sel.clear();renderLib();return;}
+  if(act==='all'){
+    const all=cardsOf(ui.libGroup).map(c=>c.id);
+    if(ui.sel.size===all.length)ui.sel.clear();else all.forEach(id=>ui.sel.add(id));
+    renderLib();return;
+  }
+  if(act==='add'||act==='remove'){batchGroups(act);return;}
+  if(act==='del'){
+    openModal('删除卡片',`<p style="font-size:13.5px;color:var(--ink-2)">${ui.sel.size} 张</p>`,[
+      {text:'取消'},{text:'删除',cls:'btn--danger',fn:()=>{
+        store.cards=store.cards.filter(c=>!ui.sel.has(c.id));
+        save();ui.sel.clear();renderLib();renderStudy();
+      }}]);
+  }
+});
+function delCard(id){
+  const c=findCard(id);if(!c)return;
+  openModal('删除卡片',`<p style="font-size:13.5px;color:var(--ink-2)">${esc(c.front||'')}</p>`,[
+    {text:'取消'},{text:'删除',cls:'btn--danger',fn:()=>{
+      store.cards=store.cards.filter(x=>x.id!==id);
+      save();renderLib();renderStudy();
+    }}]);
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.target.matches('input,textarea,select'))return;
+  if(ui.view!=='study')return;
+  if(e.key===' '||e.key==='Enter'){e.preventDefault();flip();}
+  else if(e.key==='ArrowRight')goCard(1);
+  else if(e.key==='ArrowLeft')goCard(-1);
+  else if(e.key.toLowerCase()==='s')starCurrent();
+  else if(e.key.toLowerCase()==='d')openDrawer();
+});
+
+/* ================= init ================= */
+store=load();
+ui.group=store.settings.group||'all';
+applyTheme();
+renderStudy();
+renderDrawer();
+if(!localStorage.getItem(HINT_KEY)){
+  localStorage.setItem(HINT_KEY,'1');
+  setTimeout(()=>{el('hint').classList.add('show');setTimeout(()=>el('hint').classList.remove('show'),3400)},700);
+}
+if(window.matchMedia){
+  const mq=window.matchMedia('(prefers-color-scheme: dark)');
+  const onChange=()=>{if(store.settings.theme==='auto')applyTheme()};
+  if(mq.addEventListener)mq.addEventListener('change',onChange);
+}
+window.__fc={get store(){return store},get ui(){return ui},render:renderStudy,renderLib:renderLib,show:show};
+window.Flashcards={view:()=>ui.view,home:()=>show('study')};
+})();
+</script>
+</body>
+</html>
