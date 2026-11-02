@@ -93,8 +93,8 @@ echo "[3/6] 链接资源与清单 (aapt2 link)…"
   --java "$GEN" \
   --min-sdk-version 26 \
   --target-sdk-version "$PLATFORM_VERSION" \
-  --version-code 3 \
-  --version-name 2.1 \
+  --version-code 4 \
+  --version-name 2.2 \
   --auto-add-overlay
 
 # ---------------------------------------------------------------- 4. 编译 Java
