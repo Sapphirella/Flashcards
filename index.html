@@ -473,27 +473,27 @@ function toast(msg){const t=el('toast');t.textContent=msg;t.classList.add('show'
 function fmt(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
 
 /* ================= seed / migrate ================= */
+/* 首次打开时的示例数据：只放 3 张卡片，覆盖三个不同类型（古诗文 / 单词 / 公式），
+   够看清每个卡组长什么样，又不会淹没用户自己的内容。
+   「设置 → 清空全部数据」会把这些示例一并清掉。 */
 function seed(){
   const t=now();
   const G=(name)=>({id:uid(),name:name,updatedAt:t});
-  const gs={};['古诗文','单词','数理公式','文学常识'].forEach(n=>gs[n]=G(n));
+  const gs={};['古诗文','单词','数理公式'].forEach(n=>gs[n]=G(n));
   const mk=(front,back,star,g)=>({id:uid(),front:front,back:back,starred:!!star,groups:g.map(x=>gs[x].id),createdAt:t,updatedAt:t});
   const cards=[
-    mk('劝君更尽一杯酒，西出阳关无故人。','请你再干了这一杯吧，向西出了阳关，就再也见不到老朋友了。',true,['古诗文','文学常识']),
-    mk('秦穆公、西发岐山，太山不让土壤。','秦穆公从西边出发到岐山，泰山不排斥每一粒土壤，因此才能成就其大。',true,['古诗文']),
-    mk('岂不可喜兮。','橘树刚强独立，不与群芳争艳，岂不可喜。',false,['古诗文']),
-    mk('渐车帷裳，窈窈兮心伤。','（见《氓》）',false,['古诗文']),
+    mk('劝君更尽一杯酒，西出阳关无故人。','请你再干了这一杯吧，向西出了阳关，就再也见不到老朋友了。',true,['古诗文']),
     mk('abandon','v. 放弃；抛弃；遗弃',false,['单词']),
-    mk('meticulous','adj. 一丝不苟的；细致的',false,['单词']),
-    mk('resilient','adj. 有韧性的；能快速恢复的',false,['单词']),
-    mk('∫ x² dx = x³⁄3 + C','不定积分：结果加一个任意常数 C',true,['数理公式']),
-    mk('∮ P dQ = ∮ Q dP','格林公式（沿闭合曲线）',false,['数理公式']),
-    mk('a² + b² = c²','勾股定理',false,['数理公式']),
-    mk('赎买社稷','《左传》裴注引《史记》：用土地和人民赎回国家',false,['文学常识']),
-    mk('《诗经》六义','风、雅、颂、赋、比、兴',false,['文学常识']),
-    mk('唐宋八大家','韩愈、柳宗元、欧阳修、苏洵、苏轼、苏辙、王安石、曾巩',false,['文学常识'])
+    mk('a² + b² = c²','勾股定理',false,['数理公式'])
   ];
   return {version:2,cards:cards,groups:Object.values(gs),settings:{theme:'light',fs:'std',group:'all',webdav:{url:'',user:'',pass:'',dir:'flashcards'}}};
+}
+/* 清空内容：只删卡片与卡组，保留外观（主题/字号）与 WebDAV 配置——
+   这些是偏好而不是内容，清空卡片时一并重置只会让用户莫名其妙。 */
+function emptyContent(){
+  store.cards=[];
+  store.groups=[];
+  store.settings.group='all';
 }
 function migrateV1(v1){
   const cards=[],groups=[];
@@ -1191,10 +1191,16 @@ el('setImport').onclick=()=>el('fileInput').click();
 el('setExportJson').onclick=exportJson;
 el('setExportTxt').onclick=exportTxt;
 el('setClear').onclick=()=>{
-  openModal('清空数据','',[{text:'取消'},{text:'清空',cls:'btn--danger',fn:()=>{
-    localStorage.removeItem(KEY);localStorage.removeItem(OLD_KEY);
-    store=seed();save();renderStudy();renderLib();toast('已清空');
-  }}]);
+  openModal('清空数据','<p style="font-size:13.5px;color:var(--ink-2)">将删除全部卡片与卡组（含示例卡片），无法撤销。外观与 WebDAV 设置会保留。</p>',
+    [{text:'取消'},{text:'清空',cls:'btn--danger',fn:()=>{
+      localStorage.removeItem(OLD_KEY);
+      emptyContent();save();
+      ui.group='all';ui.index=0;ui.flipped=false;ui.sel.clear();ui.batch=false;ui.libGroup='all';
+      cardEl.classList.remove('is-flipped');
+      renderStudy();renderLib();
+      el('statCards').textContent=0;el('statGroups').textContent=0;
+      toast('已清空');
+    }}]);
 };
 el('davTest').onclick=davTest;
 el('davSync').onclick=davSync;
