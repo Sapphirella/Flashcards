@@ -15,7 +15,7 @@
 | 决策 | 原因 |
 | --- | --- |
 | 单文件 | 整个应用就是一个网页，拷走 `index.html` 到任何地方都能用 —— 手机、U 盘、静态托管、离线打开 |
-| 不用框架 | 这个体量（~1353 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
+| 不用框架 | 这个体量（~1455 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
 | localStorage 存数据 | 零后端成本，且离线可用；用 WebDAV 解决多设备同步 |
 | 无构建 | 想改就改，保存刷新即生效，没有 `npm install` 门槛 |
 
@@ -27,17 +27,20 @@
 
 ```
 Flashcards/
-├── index.html          # 全部代码（HTML + CSS + JS，1353 行）
+├── index.html          # 全部代码（HTML + CSS + JS，1455 行）
 ├── README.md           # 项目说明：功能、数据格式、快速开始
 ├── HANDOVER.md         # 本文件
 ├── .gitignore
 ├── docs/images/        # README 配图
+├── tools/              # 开发用小工具：WebDAV 测试服务器 + 验证页
 └── android/            # Android 宿主工程（WebView 外壳），见 §6.2
 ```
 
-没有 `package.json`、没有 `src/`、没有构建产物。**所有改动都发生在 `index.html` 里。**
+没有 `package.json`、没有 `src/`、没有构建产物。**所有应用改动都发生在 `index.html` 里。**
 
 > `android/` 是唯一的多文件目录，但它是**宿主的壳**，不是应用代码的所在地 —— APK 里打包的仍然是根目录这一份 `index.html`，构建时同步进去。网页版与 APK 版永远同源。
+>
+> `tools/` 里的两个文件是**测试工具**，不参与应用运行：`dav-test-server.py` 起一个模拟坚果云行为的 WebDAV 服务器，`dav-verify.html` 驱动页面跑一遍 WebDAV 同步流程。详见 §6.1.5。
 
 ---
 
@@ -63,7 +66,7 @@ Flashcards/
 
 ### 3.2 状态
 
-只有两个全局状态对象（`index.html:466` 起）：
+只有两个全局状态对象（`index.html:471` 起）：
 
 ```js
 let store = null;   // 业务数据：{version, cards[], groups[], settings{}}
@@ -94,9 +97,9 @@ let ui = {
 
 | 函数 | 位置 | 负责 |
 | --- | --- | --- |
-| `renderStudy()` | `index.html:567` | 背诵视图：卡片正反面、进度条、底部计数 |
-| `renderLib()` | `index.html:847` | 卡片库：卡组 chips、卡片列表、批量栏 |
-| `renderSearch()` | `index.html:705` | 下拉搜索面板的结果列表 |
+| `renderStudy()` | `index.html:572` | 背诵视图：卡片正反面、进度条、底部计数 |
+| `renderLib()` | `index.html:852` | 卡片库：卡组 chips、卡片列表、批量栏 |
+| `renderSearch()` | `index.html:710` | 下拉搜索面板的结果列表 |
 
 **注意**：这些函数是**整块 `innerHTML` 替换**，不是局部更新。改完数据只要调用对应 `render*()` 即可，不需要手动刷新 DOM。
 
@@ -123,11 +126,11 @@ const OLD_KEY  = 'flashcards.v1';   // 旧版本（仅迁移用）
 const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 ```
 
-- `load()`（`index.html:510`）：依次尝试读 v2 → 读 v1 并迁移 → 都没有就 `seed()` 写示例数据。
-- `save(data)`（`index.html:521`）：`localStorage.setItem(KEY, JSON.stringify(data || store))`，**包了 try/catch**，写入失败（隐私模式、配额满）时静默忽略。
-- `migrateV1()`（`index.html:501`）：把 v1 的 `decks[]` 结构转成 v2 的 `groups[] + cards[].groups[]`。
-- `seed()`（`index.html:482`）：只在**从未存过数据**时跑一次，写 3 张示例卡片 + 3 个示例卡组。
-- `emptyContent()`（`index.html:496`）：清空卡片与卡组，保留外观与 WebDAV 设置。「设置 → 清空全部数据」调的是它。
+- `load()`（`index.html:515`）：依次尝试读 v2 → 读 v1 并迁移 → 都没有就 `seed()` 写示例数据。
+- `save(data)`（`index.html:526`）：`localStorage.setItem(KEY, JSON.stringify(data || store))`，**包了 try/catch**，写入失败（隐私模式、配额满）时静默忽略。
+- `migrateV1()`（`index.html:506`）：把 v1 的 `decks[]` 结构转成 v2 的 `groups[] + cards[].groups[]`。
+- `seed()`（`index.html:487`）：只在**从未存过数据**时跑一次，写 3 张示例卡片 + 3 个示例卡组。
+- `emptyContent()`（`index.html:501`）：清空卡片与卡组，保留外观与 WebDAV 设置。「设置 → 清空全部数据」调的是它。
 
 > ⚠️ **清空数据要写回一个「空 store」，而不是 `localStorage.removeItem(KEY)`。**
 > `load()` 只在 KEY **不存在**时才会跑 `seed()`；如果只是删掉 KEY 而不写回空数据，
@@ -139,7 +142,7 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 ## 4. 模块地图（带行号）
 
-> 行号对应当前 `index.html`（1353 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
+> 行号对应当前 `index.html`（1455 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
 
 | 分块 | 行 | 要点 |
 | --- | --- | --- |
@@ -148,25 +151,25 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 | 背诵视图样式 | 75–135 | 卡片 3D 翻面、滑动、飞入飞出关键帧 |
 | 浮层样式 | 137–204 | 遮罩、菜单、**搜索面板**、弹窗、按钮 |
 | 卡片库样式 | 206–248 | **批量栏修复重点**，见 §5 |
-| 设置样式 | 250–287 | 分组卡片、开关行 |
-| storage | 462 | key 常量、`uid()`、`esc()`、`toast()`、`fmt()` |
-| seed / migrate | 478 | **3 张**示例卡片、3 个示例卡组、v1 迁移、`emptyContent()` |
-| data helpers | 525 | `cardsOf(gid)` 是**最核心的查询函数** |
-| theme | 549 | `applyTheme()` 应用主题 + 同步状态栏 |
-| study view | 564 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` |
-| group menu | 656 | 卡组下拉菜单（含「星标」入口与「清空星标」） |
-| search sheet | 689 | 下拉搜索面板：`matchCards` / `markHit` / `renderSearch` / `jumpToCard` |
-| gestures | 741 | `onDown` / `onMove` / `onUp`，阈值常量 `TH` |
-| library | 846 | `renderLib()` 渲染列表与批量栏 |
-| modal | 894 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
-| card editor | 929 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
-| group manager | 972 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
-| batch ops | 1025 | `batchGroups(mode)` 批量加入/移出卡组 |
-| import/export | 1050 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
-| webdav | 1119 | `davFetch` / `davTest` / `davSync` |
-| views | 1175 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
-| events | 1200 | 所有事件绑定、键盘快捷键 |
-| init | 1333 | 启动：load → applyTheme → render → 首次提示 |
+| 设置样式 | 250–290 | 分组卡片、开关行、WebDAV 备份位置与坚果云提示 |
+| storage | 467 | key 常量、`uid()`、`esc()`、`toast()`、`fmt()` |
+| seed / migrate | 483 | **3 张**示例卡片、3 个示例卡组、v1 迁移、`emptyContent()` |
+| data helpers | 530 | `cardsOf(gid)` 是**最核心的查询函数** |
+| theme | 554 | `applyTheme()` 应用主题 + 同步状态栏 |
+| study view | 569 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` |
+| group menu | 661 | 卡组下拉菜单（含「星标」入口与「清空星标」） |
+| search sheet | 694 | 下拉搜索面板：`matchCards` / `markHit` / `renderSearch` / `jumpToCard` |
+| gestures | 746 | `onDown` / `onMove` / `onUp`，阈值常量 `TH` |
+| library | 851 | `renderLib()` 渲染列表与批量栏 |
+| modal | 899 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
+| card editor | 934 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
+| group manager | 977 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
+| batch ops | 1030 | `batchGroups(mode)` 批量加入/移出卡组 |
+| import/export | 1055 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
+| webdav | 1124 | `davFetch` / `davErrText` / `davEnsureDir` / `davTest` / `davSync` |
+| views | 1274 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
+| events | 1300 | 所有事件绑定、键盘快捷键 |
+| init | 1435 | 启动：load → applyTheme → render → 首次提示 |
 
 ### 关键函数速查
 
@@ -260,12 +263,95 @@ transform:translateY(-101%)   ← 藏在屏幕上方
 ### 6.1 WebDAV
 
 - 地址格式：`https://dav.example.com/flashcards`（不带结尾斜杠，代码会 `replace(/\/+$/,'')`）。
-- 实际文件路径：`<地址>/<目录>/flashcards.json`。
+- 实际文件路径：`<地址>/<目录>/flashcards.json`。目录按 `/` 拆成层级**逐级 URL 编码**，中文目录名才不会被服务端拒掉。
 - 认证：`Basic` + `btoa(unescape(encodeURIComponent(user + ':' + pass)))` —— 那段 `unescape/encodeURIComponent` 是为了兼容中文密码。
-- 测试连接：先 `OPTIONS`，若 `!r.ok && status!==405` 则退回 `PROPFIND`（`Depth:0`）。
-- 同步：`GET` 远端 → `mergeStore(local, remote)` → `PUT` 回远端。
+- 测试连接：先 `OPTIONS`，若 `!r.ok && status!==405` 则退回 `PROPFIND`（`Depth:0`），再 `PROPFIND` 一次目标目录确认它在不在。
+- 同步：`GET` 远端 → `mergeStore(local, remote)` → `MKCOL` 逐级建目录 → `PUT` 回远端。
 
 **合并语义**：卡片和卡组**各自独立**比较 `updatedAt`，谁的 `updatedAt` 大用谁。同一张卡在两台设备上同时被改，仍然会丢一方（last-write-wins），这是有意为之的简化。
+
+#### 6.1.1 ⚠️ 上传必须检查返回码
+
+早期版本的同步代码是这样的：
+
+```js
+await davFetch(file,{method:'PUT',...});      // ← 返回值被丢掉
+store.settings.lastSync=now();save();
+setStatus('已同步 · '+fmt(now()));            // ← 无论成功失败都显示「已同步」
+```
+
+服务器回 401（应用密码错）、403（没权限）、409（父目录不存在），应用一律显示「已同步」。
+用户以为存上了，其实网盘里什么都没有 —— 这个 bug 坑过真实用户。
+
+**现在必须写成**：
+
+```js
+const r=await davFetch(file,{method:'PUT',...});
+if(!r.ok){ setStatus('上传失败 · '+davErrText(r.status,await davText(r)),true); return; }
+```
+
+`davErrText()` 把状态码翻译成人话（401 → 「认证失败：账号或应用密码不对」，
+403 → 「没有权限」，409 → 「父目录不存在」……），并附上服务器返回体的前 100 字。
+
+同一条铁律适用于 `GET`：**读远端时如果拿到 401/403，要立刻报错返回**，
+不能当成「远端还没有备份」继续往下走。
+
+#### 6.1.2 ⚠️ WebDAV 不会自动建父目录
+
+`PUT /dav/flashcards/flashcards.json` 如果 `/dav/flashcards/` 不存在，服务器会回 **409**，
+**不会**替你把目录建出来。坚果云等主流服务都支持 `MKCOL`，所以 `davEnsureDir()` 逐级建目录：
+
+```
+MKCOL <base>/dir1        → 201 建好 / 405 已存在 / 409 父目录缺失（真失败）
+MKCOL <base>/dir1/dir2   → 同上
+```
+
+只有 409 才中断；403 不中断 —— 有些服务不给 `MKCOL` 权限但允许直接 `PUT`，
+让 `PUT` 自己去报错更准。
+
+#### 6.1.3 ⚠️ 网页版连不了坚果云（CORS）
+
+**坚果云不返回 `Access-Control-Allow-Origin`**，浏览器会按同源策略拦下跨域 WebDAV 请求。
+这是浏览器的硬性限制，网页端绕不过去。
+
+| | 网页版 | APK |
+| --- | --- | --- |
+| 坚果云 | ❌ | ✅ |
+| 自建 / 开了 CORS 的 WebDAV | ✅ | ✅ |
+
+APK 走原生 HTTP 通道（`window.Android.davRequest` → `SimpleHttp`），不受同源策略约束。
+
+所以：**要跟坚果云同步就用 APK**。README 与设置页里都写了这条。
+
+坚果云的两个必坑点：密码必须是「安全选项 → 第三方应用管理 → 添加应用密码」生成的
+**应用密码**（不是网页登录密码）；另外坚果云的 WebDAV 只能看到**同步文件夹**，
+文件可能出现在某个同步文件夹里而不是「我的坚果云」根目录。
+
+#### 6.1.4 并发保护
+
+`davBusy` 是一把同步互斥锁。连点两次「立即同步」会让两个请求交错，
+后完成的那个把前一个的状态提示盖掉，可能出现「明明失败了却显示已同步」。
+`davSync()` 用 `try/finally` 保证锁一定释放。
+
+#### 6.1.5 怎么本地验证 WebDAV
+
+没有 WebDAV 账号也能测。`tools/` 下有一套现成的：
+
+```bash
+python3 tools/dav-test-server.py --port 8780 --root /tmp/davroot --cors
+python3 -m http.server 8777
+# 打开 http://127.0.0.1:8777/tools/dav-verify.html
+```
+
+`dav-test-server.py` 是个最小 WebDAV 服务器，**刻意复现了坚果云的关键行为**：
+目录不存在时 `PUT` 返回 409、认证失败返回 401、且不自动建父目录。
+`dav-verify.html` 会驱动页面跑完「连接 → 首次同步（自动建目录）→ 密码错误 → 目录建不出来」四条路径。
+
+想模拟「服务器不支持 MKCOL」：
+
+```bash
+python3 tools/dav-test-server.py --port 8781 --root /tmp/davroot2 --cors --no-mkcol
+```
 
 ### 6.2 Android 宿主工程
 
@@ -329,7 +415,7 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 | 正式 | `app/build/outputs/apk/release/app-release.apk` | `build/manual/out/flashcards-release.apk` | `com.amarisgo.flashcards` |
 | 调试 | `app/build/outputs/apk/debug/app-debug.apk` | `build/manual/out/flashcards-debug.apk` | `com.amarisgo.flashcards.debug` |
 
-配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 3 / versionName 2.1。
+配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 4 / versionName 2.2。
 
 - **minSdk 26（Android 8.0）**：这样只需要自适应图标（纯 XML），不必生成 PNG 位图。
 - **targetSdk 35 + 手动应用 systemBars insets 作为 padding**：API 35 强制 edge-to-edge，早期版本系统已内缩窗口、insets 为 0，两者统一处理不会重复留白。
@@ -368,7 +454,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 
 宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图、`Flashcards.back()` 关闭最上层浮层（弹窗 → 搜索面板 → 卡组菜单），没有浮层可关时返回 `false`。
 
-`closeTopOverlay()` 在 `index.html:1193`。
+`closeTopOverlay()` 在 `index.html:1293`。
 
 ---
 
@@ -384,20 +470,20 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 ### 7.2 加一个新视图
 
 1. 加 `<section class="view" id="vYourView">…</section>`，放在 `#app` 内。
-2. 在 `show(view)`（`index.html:1176`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
+2. 在 `show(view)`（`index.html:1275`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
 3. 加 `ui.yourview = ...` 状态。
 4. 记得给 `#app` 里的兄弟 section 留出空间（它们 `display:none`，不占位）。
 
 ### 7.3 加一条数据字段
 
-1. `seed()`（`index.html:482`）里给示例卡片补上新字段。
-2. `editCard()`（`index.html:941`）里加输入项，保存时写进对象。
-3. `mergeStore()`（`index.html:1077`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
+1. `seed()`（`index.html:487`）里给示例卡片补上新字段。
+2. `editCard()`（`index.html:946`）里加输入项，保存时写进对象。
+3. `mergeStore()`（`index.html:1082`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
 4. 如果字段会破坏兼容，考虑在 `load()` 里做默认值兜底。
 
 ### 7.4 加一种卡片操作
 
-批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1297`）和 `batchGroups()`（`index.html:1026`）两处。新的批量动作需要在这两处都加分支。
+批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1399`）和 `batchGroups()`（`index.html:1031`）两处。新的批量动作需要在这两处都加分支。
 
 ---
 
@@ -410,14 +496,16 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 | 3 | 批量栏在 < 340px 极窄屏下文字截断 | 显示为「加入卡…」 | 已用 `text-overflow:ellipsis` 兜底，功能正常 |
 | 4 | 同一张卡并发修改会丢一方 | WebDAV 同步边缘情况 | last-write-wins 的固有代价 |
 | 5 | 卡片库列表滚动位置在视图切换后保留 | 可能不符合预期 | 与原实现一致，暂未改 |
-| 6 | `index.html` 单文件已达 1353 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
+| 6 | `index.html` 单文件已达 1455 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
 | 7 | 示例数据在首次打开时自动写入 | 打开即有 3 张示例卡片 | 设计如此（3 张够看清形态又不淹没内容），「设置 → 清空全部数据」可一键清掉 |
 | 8 | 搜索面板不搜卡组名 | 只搜卡片正反面，搜不到「古诗文」这类卡组名 | 有意为之：卡组本来就能在菜单里直接选。要加的话改 `matchCards()` 一处即可 |
 | 9 | 搜索跳转统一落到「全部卡片」上下文 | 从某个卡组里搜到别的卡组的卡，跳过去后卡组变成了「全部卡片」 | 有意为之：搜索是跨卡组的，沿用当前卡组上下文会导致「看到的卡」和「搜到的卡」对不上 |
 | 10 | 清空数据不可撤销 | 手滑清空就没了 | 弹窗里已写明「无法撤销」；建议用户定期「导出 JSON」 |
-| 11 | APK 未做真机安装验证 | 首次装机可能遇到未预料的问题 | 构建机上无设备也无模拟器镜像，只做了静态验证（签名/对齐/badging/资源完整性）；接手后请装真机走一遍 §10.1 |
-| 12 | WebDAV 原生桥未在真机验证 | 原生分支能否真正绕过 CORS 未经证实 | 网页版的 `fetch` 分支已实测通过；原生分支需在真机上连一次真实 WebDAV 服务器才能确认 |
-| 13 | 系统栏 insets / 安全区未在真机验证 | 全面屏机型可能留白不均 | API 35 的 edge-to-edge 处理是按文档实现的，缺真机确认 |
+| 11 | 网页版无法连坚果云 | 用户在浏览器里怎么试都不行 | **浏览器同源策略，绕不过去**（坚果云不返回 CORS 头）。要同步就用 APK，README 与设置页都已写明 |
+| 12 | WebDAV 合并是 last-write-wins | 同一条记录两端同时改会丢一方 | 有意为之的简化，已在 §6.1 说明 |
+| 13 | APK 未做真机安装验证 | 首次装机可能遇到未预料的问题 | 构建机上无设备也无模拟器镜像，只做了静态验证（签名/对齐/badging/资源完整性）；接手后请装真机走一遍 §10.1 |
+| 14 | WebDAV 原生桥未在真机验证 | 原生分支能否真正绕过 CORS 未经证实 | 网页版的 `fetch` 分支已用 `tools/` 里的测试服务器实测通过；原生分支需在真机上连一次真实 WebDAV 服务器才能确认 |
+| 15 | 系统栏 insets / 安全区未在真机验证 | 全面屏机型可能留白不均 | API 35 的 edge-to-edge 处理是按文档实现的，缺真机确认 |
 
 ---
 
@@ -458,6 +546,14 @@ chore: 移除已废弃的 .scroll 工具类
 - `android/keystore/`（签名密钥）与 `android/local.properties`（SDK 路径）**都不入库**，由 `android/.gitignore` 排除。
 - `android/build/` 是构建产物目录，也被忽略；需要出包时本地跑一次构建脚本即可。
 - `android/app/src/main/webfonts/` 下的 woff2 **要入库** —— 它们是离线字体，改了会被 `syncWebAssets` 打进 APK。
+- 根目录的 `dist/` 放交付用的 APK，**不入库**（`.gitignore` 已排除）—— 换个目录是为了绕开「同路径两次交付，
+  客户端按路径命中旧文件缓存」。正式发布建议按版本号命名，如 `flashcards-2.1-release.apk`。
+
+**关于 `tools/` 目录**：
+
+- 两个文件都**要入库** —— 它们是 WebDAV 逻辑的回归测试，改了同步逻辑就能拿来验。
+- `dav-test-server.py` 刻意模拟坚果云行为（409 不自动建父目录、401 认证失败），改它之前先读一遍注释。
+- `dav-verify.html` 依赖页面地址是 `http://127.0.0.1:8777/tools/dav-verify.html`（iframe 用 `../index.html`）。
 
 ---
 
@@ -475,6 +571,8 @@ python3 -m http.server 8777   # 在项目根目录
 - [ ] **星标**：卡片上的星标按钮能加/取消；卡组菜单里有「星标」入口（点进去只刷星标）；有星标时菜单底部出现「清空星标」
 - [ ] **卡片库**：卡组筛选、卡片增删改、批量模式（长列表 + 短列表各看一次底栏位置）
 - [ ] **设置**：主题切换、字号切换、WebDAV 测试连接与同步、导出 JSON / TXT、导入 JSON（覆盖与合并两种）
+- [ ] **WebDAV 同步**：目录不存在时能自动建出来；同步后网盘里确实出现 `flashcards.json`；
+      **密码填错时必须报错而不是显示「已同步」**；设置页的「备份位置」路径正确
 - [ ] **清空数据**：设置 → 清空全部数据 → 卡片和卡组都归零，**刷新后仍然是 0**（不会被示例卡片重新灌回来）
 - [ ] **首次打开**：清掉 localStorage 后打开，只有 **3 张**示例卡片
 - [ ] **视口**：375×667（iPhone SE）、390×844（iPhone 14）、768×1024（平板）、桌面宽屏
@@ -532,6 +630,21 @@ A：不能。两者是各自独立的 localStorage（网页版按域名存，APK
 A：多半是只 `localStorage.removeItem(KEY)` 而没写回空数据。`load()` 只在 KEY **不存在**时才跑 `seed()`，
 所以正确做法是 `emptyContent(); save();` —— 写回一个 cards/groups 都为空的 store。见 §3.5。
 
+**Q：坚果云同步后，网盘里看不到备份文件？**
+A：按顺序查三件事：
+
+1. **你是不是用网页版同步的？** 坚果云不返回 CORS 头，浏览器会拦下跨域 WebDAV 请求 —— 网页版**根本连不上**。
+   要同步必须用 APK（走原生 HTTP 通道，不受同源策略约束）。
+2. **密码用的是不是应用密码？** 坚果云要求「安全选项 → 第三方应用管理 → 添加应用密码」生成的应用密码，
+   不是网页登录密码。填错会返回 401。
+3. **文件在哪？** 设置页的「备份位置」会显示完整路径 `<地址>/<目录>/flashcards.json`。
+   目录不存在时应用会自动 `MKCOL` 建出来。注意坚果云的 WebDAV 只能看到**同步文件夹**，
+   文件可能出现在某个同步文件夹里，而不是「我的坚果云」根目录。
+
+新版本会把失败原因直接显示出来（认证失败 / 没有权限 / 父目录不存在…），
+不用再猜。老版本上传时**不检查返回码**，服务器回 401/403/409 也照样显示「已同步」——
+那个坑已经修掉了，见 §6.1.1。
+
 **Q：搜索面板里搜不到某个卡组的名字？**
 A：`matchCards()` 只匹配卡片的正面与背面，不搜卡组名。要加的话在那一个函数里补一段即可。
 
@@ -539,7 +652,7 @@ A：`matchCards()` 只匹配卡片的正面与背面，不搜卡组名。要加�
 
 ## 12. 接手后的第一个建议
 
-先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1353 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
+先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1455 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
 
 读完重点看这几处：
 
@@ -548,8 +661,17 @@ A：`matchCards()` 只匹配卡片的正面与背面，不搜卡组名。要加�
 3. `mergeStore()` —— 导入合并与 WebDAV 同步共用的核心
 4. `onDown` / `onMove` / `onUp` —— 手势系统，改动时最容易破坏手感
 5. `matchCards()` / `markHit()` / `jumpToCard()` —— 搜索面板三件套，是唯一会拼 HTML 的地方，注意 `esc()`
-6. `davFetch()` / `closeTopOverlay()` —— 两处宿主适配点，改动时要保证纯网页环境行为不变
+6. `davFetch()` / `davErrText()` / `davEnsureDir()` —— WebDAV 三件套，改动后务必用 §6.1.5 的测试服务器跑一遍
+7. `davFetch()` / `closeTopOverlay()` —— 两处宿主适配点，改动时要保证纯网页环境行为不变
 
 然后从 README 的「验证清单」走一遍，确认环境正常，就可以动手了。
+
+改 WebDAV 相关代码的话，**先跑一遍本地测试**（不需要任何账号）：
+
+```bash
+python3 tools/dav-test-server.py --port 8780 --root /tmp/davroot --cors &
+python3 -m http.server 8777 &
+# 打开 http://127.0.0.1:8777/tools/dav-verify.html
+```
 
 如果你要动 APK 相关的东西，再花 10 分钟读一遍 `android/README.md` 和本文件 §6.2 —— 那里记了宿主架构、桥接协议和**尚未验证的部分**（真机、Gradle 路径、原生 WebDAV 桥都还没在真机上跑过）。

@@ -142,22 +142,58 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 在「设置 → WebDAV」填入地址、账号、密码与目录，然后：
 
-- **测试连接**：发 `OPTIONS`，失败则退回 `PROPFIND`
-- **立即同步**：先 `GET` 远端文件与本地合并，再 `PUT` 回远端
+- **测试连接**：先 `OPTIONS`，失败则退回 `PROPFIND`，再检查目标目录是否存在
+- **立即同步**：先 `GET` 远端文件与本地合并，再 `PUT` 回远端；目录不存在会先自动创建
 
 合并规则是**按 `updatedAt` 时间戳逐条决胜**，卡片和卡组各自独立比较，因此多设备同时编辑不会互相覆盖整份数据（但同一条记录的同时修改仍会丢一方）。
 
 同步文件路径为 `<地址>/<目录>/flashcards.json`。密码以明文存在 localStorage，请自行评估设备安全性。
 
+设置页会实时显示**备份位置**的完整 URL —— 同步完去网盘里按这个路径找文件，不用猜。
+
+### ⚠️ 坚果云：只能用 APK，网页版会被浏览器拦下
+
+| | 网页版 | APK |
+| --- | --- | --- |
+| 坚果云 | ❌ **不行** | ✅ 可以 |
+| 自建 / 支持 CORS 的 WebDAV | ✅ | ✅ |
+
+原因：坚果云**不返回 `Access-Control-Allow-Origin` 头**，浏览器会以同源策略拦下跨域的 WebDAV 请求。这是浏览器强制的，网页端绕不过去。APK 走的是原生 HTTP 通道（`window.Android.davRequest`），不受同源策略约束。
+
+坚果云配置：
+
+| 字段 | 填什么 |
+| --- | --- |
+| 地址 | `https://dav.jianguoyun.com/dav/` |
+| 账号 | 你的坚果云**邮箱** |
+| 密码 | 「安全选项 → 第三方应用管理 → 添加应用密码」生成的**应用密码** |
+| 目录 | 随便起，如 `flashcards`（不存在会自动建） |
+
+> 密码必须是**应用密码**，不是网页登录密码 —— 坚果云不允许第三方应用用登录密码访问 WebDAV。
+> 另外坚果云的 WebDAV 只能看到「同步文件夹」，文件可能出现在某个同步文件夹里而不是「我的坚果云」根目录。
+
+**同步失败时现在会直接告诉你原因**，不再是一句笼统的「上传失败」：
+
+| 提示 | 原因 |
+| --- | --- |
+| `认证失败：账号或应用密码不对` | 账号填错，或用了登录密码而不是应用密码 |
+| `没有权限：应用密码可能没勾选「读写」权限` | 生成应用密码时没勾读写权限 |
+| `父目录不存在` | 目录建不出来，检查目录名，或去网盘手动建好 |
+| `读取失败 · …` | 远端文件读不到，多半是认证问题 |
+
+> 以前上传时**不检查服务器返回码**，服务器回 401/403/409 也会显示「已同步」——
+> 于是你以为存上了，其实网盘里什么都没有。这是本次修掉的主要问题。
+
 ## 项目结构
 
 ```
 Flashcards/
-├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1353 行）
+├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1455 行）
 ├── README.md       # 本文件
 ├── HANDOVER.md     # 项目接手文档：架构、数据流、扩展指引、遗留问题
 ├── .gitignore      # 忽略 .DS_Store 等
 ├── docs/images/    # README 配图
+├── tools/          # 开发用的小工具（WebDAV 测试服务器与验证页）
 └── android/        # Android 宿主工程：WebView 外壳 + 打包脚本
 ```
 
@@ -165,24 +201,24 @@ Flashcards/
 
 | 分块 | 行号 | 内容 |
 | --- | --- | --- |
-| storage | 462 | localStorage 读写、键名常量 |
-| seed / migrate | 478 | 3 张示例卡片、v1 → v2 数据迁移 |
-| data helpers | 525 | `cardsOf` / `groupById` 等查询helper |
-| theme | 549 | 主题与字号应用 |
-| study view | 564 | 背诵视图渲染、翻面、切卡、星标 |
-| group menu | 656 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
-| search sheet | 689 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
-| gestures | 741 | 指针手势：滑动切卡 / 上滑星标 / 下拉搜索 |
-| library | 846 | 卡片库列表与批量栏渲染 |
-| modal | 894 | 通用弹窗框架 |
-| card editor | 929 | 新增 / 编辑卡片 |
-| group manager | 972 | 卡组增删改 |
-| batch group ops | 1025 | 批量加入 / 移出卡组 |
-| import / export | 1050 | JSON / TXT 导入导出、数据合并 |
-| webdav | 1119 | WebDAV 连接测试与同步（`davFetch` 走原生桥或 fetch） |
-| views | 1175 | 视图切换、`closeTopOverlay` 浮层关闭 |
-| events | 1200 | 事件绑定与键盘快捷键 |
-| init | 1333 | 启动引导 |
+| storage | 467 | localStorage 读写、键名常量 |
+| seed / migrate | 483 | 3 张示例卡片、v1 → v2 数据迁移 |
+| data helpers | 530 | `cardsOf` / `groupById` 等查询helper |
+| theme | 554 | 主题与字号应用 |
+| study view | 569 | 背诵视图渲染、翻面、切卡、星标 |
+| group menu | 661 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
+| search sheet | 694 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
+| gestures | 746 | 指针手势：滑动切卡 / 上滑星标 / 下拉搜索 |
+| library | 851 | 卡片库列表与批量栏渲染 |
+| modal | 899 | 通用弹窗框架 |
+| card editor | 934 | 新增 / 编辑卡片 |
+| group manager | 977 | 卡组增删改 |
+| batch group ops | 1030 | 批量加入 / 移出卡组 |
+| import / export | 1055 | JSON / TXT 导入导出、数据合并 |
+| webdav | 1124 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
+| views | 1274 | 视图切换、`closeTopOverlay` 浮层关闭 |
+| events | 1300 | 事件绑定与键盘快捷键 |
+| init | 1435 | 启动引导 |
 
 ## 开发约定
 
