@@ -15,7 +15,7 @@
 | 决策 | 原因 |
 | --- | --- |
 | 单文件 | 整个应用就是一个网页，拷走 `index.html` 到任何地方都能用 —— 手机、U 盘、静态托管、离线打开 |
-| 不用框架 | 这个体量（~1303 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
+| 不用框架 | 这个体量（~1353 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
 | localStorage 存数据 | 零后端成本，且离线可用；用 WebDAV 解决多设备同步 |
 | 无构建 | 想改就改，保存刷新即生效，没有 `npm install` 门槛 |
 
@@ -27,7 +27,7 @@
 
 ```
 Flashcards/
-├── index.html          # 全部代码（HTML + CSS + JS，1303 行）
+├── index.html          # 全部代码（HTML + CSS + JS，1353 行）
 ├── README.md           # 项目说明：功能、数据格式、快速开始
 ├── HANDOVER.md         # 本文件
 ├── .gitignore
@@ -51,9 +51,9 @@ Flashcards/
        ├─ section#vStudy       背诵视图
        ├─ section#vLibrary     卡片库视图
        └─ section#vSettings    设置视图
-  ├─ .scrim                    全局遮罩（弹窗/抽屉/菜单共用）
+  ├─ .scrim                    全局遮罩（弹窗/搜索面板/菜单共用）
   ├─ .menu#deckMenu            卡组下拉菜单
-  ├─ aside#drawer              星标抽屉
+  ├─ .searchsheet#searchSheet  下拉搜索面板（含搜索框 + 结果列表）
   ├─ .modal#modal              通用弹窗
   ├─ .toast                    轻提示
   └─ .hint                     首次使用提示
@@ -63,7 +63,7 @@ Flashcards/
 
 ### 3.2 状态
 
-只有两个全局状态对象（`index.html:463` 起）：
+只有两个全局状态对象（`index.html:466` 起）：
 
 ```js
 let store = null;   // 业务数据：{version, cards[], groups[], settings{}}
@@ -94,9 +94,9 @@ let ui = {
 
 | 函数 | 位置 | 负责 |
 | --- | --- | --- |
-| `renderStudy()` | `index.html:564` | 背诵视图：卡片正反面、进度条、底部计数 |
-| `renderLib()` | `index.html:811` | 卡片库：卡组 chips、卡片列表、批量栏 |
-| `renderDrawer()` | `index.html:685` | 星标抽屉列表 |
+| `renderStudy()` | `index.html:567` | 背诵视图：卡片正反面、进度条、底部计数 |
+| `renderLib()` | `index.html:847` | 卡片库：卡组 chips、卡片列表、批量栏 |
+| `renderSearch()` | `index.html:705` | 下拉搜索面板的结果列表 |
 
 **注意**：这些函数是**整块 `innerHTML` 替换**，不是局部更新。改完数据只要调用对应 `render*()` 即可，不需要手动刷新 DOM。
 
@@ -123,9 +123,15 @@ const OLD_KEY  = 'flashcards.v1';   // 旧版本（仅迁移用）
 const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 ```
 
-- `load()`（`index.html:507`）：依次尝试读 v2 → 读 v1 并迁移 → 都没有就 `seed()` 写示例数据。
-- `save(data)`（`index.html:518`）：`localStorage.setItem(KEY, JSON.stringify(data || store))`，**包了 try/catch**，写入失败（隐私模式、配额满）时静默忽略。
-- `migrateV1()`（`index.html:498`）：把 v1 的 `decks[]` 结构转成 v2 的 `groups[] + cards[].groups[]`。
+- `load()`（`index.html:510`）：依次尝试读 v2 → 读 v1 并迁移 → 都没有就 `seed()` 写示例数据。
+- `save(data)`（`index.html:521`）：`localStorage.setItem(KEY, JSON.stringify(data || store))`，**包了 try/catch**，写入失败（隐私模式、配额满）时静默忽略。
+- `migrateV1()`（`index.html:501`）：把 v1 的 `decks[]` 结构转成 v2 的 `groups[] + cards[].groups[]`。
+- `seed()`（`index.html:482`）：只在**从未存过数据**时跑一次，写 3 张示例卡片 + 3 个示例卡组。
+- `emptyContent()`（`index.html:496`）：清空卡片与卡组，保留外观与 WebDAV 设置。「设置 → 清空全部数据」调的是它。
+
+> ⚠️ **清空数据要写回一个「空 store」，而不是 `localStorage.removeItem(KEY)`。**
+> `load()` 只在 KEY **不存在**时才会跑 `seed()`；如果只是删掉 KEY 而不写回空数据，
+> 下次打开示例卡片会全部回来。清空的正确做法是 `emptyContent(); save();`。
 
 **破坏性变更时不要删旧 key 的兼容读取** —— 用户升级后老数据还在 localStorage 里，读不到就等于清空。
 
@@ -133,34 +139,34 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 ## 4. 模块地图（带行号）
 
-> 行号对应当前 `index.html`（1303 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
+> 行号对应当前 `index.html`（1353 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
 
 | 分块 | 行 | 要点 |
 | --- | --- | --- |
 | CSS 变量 / 主题 | 12–38 | `:root` 定义配色，`[data-theme="dark"]` 覆盖，`[data-fs="lg\|xl"]` 覆盖字号 |
 | 布局骨架 | 53–55 | `#app` / `.view` / `.scroll`（`.scroll` 已于本次修复移除） |
 | 背诵视图样式 | 75–135 | 卡片 3D 翻面、滑动、飞入飞出关键帧 |
-| 浮层样式 | 137–201 | 遮罩、菜单、抽屉、弹窗、按钮 |
-| 卡片库样式 | 203–246 | **本次修复重点**，见 §5 |
-| 设置样式 | 247–268 | 分组卡片、开关行 |
-| storage | 459 | key 常量、`uid()`、`esc()`、`toast()`、`fmt()` |
-| seed / migrate | 475 | 13 张示例卡片、4 个示例卡组、v1 迁移 |
-| data helpers | 522 | `cardsOf(gid)` 是**最核心的查询函数** |
-| theme | 546 | `applyTheme()` 应用主题 + 同步状态栏 |
-| study view | 561 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` |
-| group menu | 653 | 卡组下拉菜单（含「新建卡组」「管理卡组」） |
-| star drawer | 684 | 星标抽屉 |
-| gestures | 705 | `onDown` / `onMove` / `onUp`，阈值常量 `TH` |
-| library | 810 | `renderLib()` 渲染列表与批量栏 |
-| modal | 858 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
-| card editor | 893 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
-| group manager | 936 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
-| batch ops | 989 | `batchGroups(mode)` 批量加入/移出卡组 |
-| import/export | 1014 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
-| webdav | 1083 | `davFetch` / `davTest` / `davSync` |
-| views | 1139 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
-| events | 1164 | 所有事件绑定、键盘快捷键 |
-| init | 1283 | 启动：load → applyTheme → render → 首次提示 |
+| 浮层样式 | 137–204 | 遮罩、菜单、**搜索面板**、弹窗、按钮 |
+| 卡片库样式 | 206–248 | **批量栏修复重点**，见 §5 |
+| 设置样式 | 250–287 | 分组卡片、开关行 |
+| storage | 462 | key 常量、`uid()`、`esc()`、`toast()`、`fmt()` |
+| seed / migrate | 478 | **3 张**示例卡片、3 个示例卡组、v1 迁移、`emptyContent()` |
+| data helpers | 525 | `cardsOf(gid)` 是**最核心的查询函数** |
+| theme | 549 | `applyTheme()` 应用主题 + 同步状态栏 |
+| study view | 564 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` |
+| group menu | 656 | 卡组下拉菜单（含「星标」入口与「清空星标」） |
+| search sheet | 689 | 下拉搜索面板：`matchCards` / `markHit` / `renderSearch` / `jumpToCard` |
+| gestures | 741 | `onDown` / `onMove` / `onUp`，阈值常量 `TH` |
+| library | 846 | `renderLib()` 渲染列表与批量栏 |
+| modal | 894 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
+| card editor | 929 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
+| group manager | 972 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
+| batch ops | 1025 | `batchGroups(mode)` 批量加入/移出卡组 |
+| import/export | 1050 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
+| webdav | 1119 | `davFetch` / `davTest` / `davSync` |
+| views | 1175 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
+| events | 1200 | 所有事件绑定、键盘快捷键 |
+| init | 1333 | 启动：load → applyTheme → render → 首次提示 |
 
 ### 关键函数速查
 
@@ -221,11 +227,29 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 **修复**：改成 §5.1 的三段式布局，两个底栏统一 `flex:none`，彻底移除 sticky 依赖。
 
-**怎么复现**：卡片库 → 点右上角「批量管理」→ 看底栏。建议同时验证「13 张卡片（长列表）」和「3 张卡片（短列表）」两种情况 —— 修复前这两种的表现完全不同，只测一种会漏。
+**怎么复现**：卡片库 → 点右上角「批量管理」→ 看底栏。建议同时验证「卡片很多（长列表）」和「只有 3 张（短列表）」两种情况 —— 修复前这两种的表现完全不同，只测一种会漏。
 
 > 通用教训：**在 flex 列布局里，`overflow` 不是 `visible` 的元素会自动最小尺寸归零**，只要它同时还是可收缩的 flex item，就存在被压扁的风险。给固定头尾一律加 `flex:none`。
 
-### 5.3 安全区适配
+### 5.3 顶部下拉面板（搜索面板）
+
+搜索面板 `.searchsheet` 是从顶部滑下来的 sheet，结构和抽屉时代一样，但要注意两点：
+
+```
+position:fixed; top:0; height:auto; max-height:min(78dvh,620px);
+transform:translateY(-101%)   ← 藏在屏幕上方
+.searchsheet.show{transform:none}
+```
+
+1. **面板会盖住顶部的卡组按钮**（`deckChip`）。所以面板里必须有一个明确的「收起」入口 ——
+   现在是右上角的 ✕（`searchClose`），它会**关闭面板并清空查询**；
+   点遮罩（`.scrim`）也能关。早期版本 ✕ 只清空文本不关面板，结果用户想用卡组菜单还得先点遮罩，很别扭。
+
+2. **拖拽过程用 inline `transform` 跟手，松手后再交给 CSS transition。**
+   `onMove` 里设 `d.style.transition='none'` 并直接写 `translateY(dy)`；
+   `onUp` 里根据位移是否超过阈值（`TH.searchPx`）决定吸附展开还是滑回去。
+
+### 5.4 安全区适配
 
 底部统一用 `padding-bottom: calc(env(safe-area-inset-bottom) + 14px)`，头部用 `padding-top: calc(env(safe-area-inset-top) + 10px)`。这样在 iPhone 刘海屏 / 底部横条上不会被系统栏压住。**新增固定在底部的元素时别忘了这个。**
 
@@ -281,7 +305,7 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 `davFetch()` 把原生返回包装成近似 `fetch` 的对象（只需 `ok` / `status` / `json()` / `text()`），让 `davTest` / `davSync` 的代码在两种环境下一模一样。
 
-原生 → 页面：返回键事件。`MainActivity` 优先调 `window.Flashcards.back()`（关掉最上层的弹窗 / 抽屉 / 菜单）；返回 `false` 说明没有浮层可关，才执行默认的「返回上一层 / 退出」。
+原生 → 页面：返回键事件。`MainActivity` 优先调 `window.Flashcards.back()`（关掉最上层的弹窗 / 搜索面板 / 菜单）；返回 `false` 说明没有浮层可关，才执行默认的「返回上一层 / 退出」。
 
 #### 6.2.4 构建
 
@@ -342,9 +366,9 @@ window.__fc = { store, ui, render, renderLib, show };   // 调试用
 window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () => closeTopOverlay() };
 ```
 
-宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图、`Flashcards.back()` 关闭最上层浮层（弹窗 → 星标抽屉 → 卡组菜单），没有浮层可关时返回 `false`。
+宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图、`Flashcards.back()` 关闭最上层浮层（弹窗 → 搜索面板 → 卡组菜单），没有浮层可关时返回 `false`。
 
-`closeTopOverlay()` 在 `index.html:1157`。
+`closeTopOverlay()` 在 `index.html:1193`。
 
 ---
 
@@ -360,20 +384,20 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 ### 7.2 加一个新视图
 
 1. 加 `<section class="view" id="vYourView">…</section>`，放在 `#app` 内。
-2. 在 `show(view)`（`index.html:1140`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
+2. 在 `show(view)`（`index.html:1176`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
 3. 加 `ui.yourview = ...` 状态。
 4. 记得给 `#app` 里的兄弟 section 留出空间（它们 `display:none`，不占位）。
 
 ### 7.3 加一条数据字段
 
-1. `seed()`（`index.html:476`）里给示例卡片补上新字段。
-2. `editCard()`（`index.html:905`）里加输入项，保存时写进对象。
-3. `mergeStore()`（`index.html:1041`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
+1. `seed()`（`index.html:482`）里给示例卡片补上新字段。
+2. `editCard()`（`index.html:941`）里加输入项，保存时写进对象。
+3. `mergeStore()`（`index.html:1077`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
 4. 如果字段会破坏兼容，考虑在 `load()` 里做默认值兜底。
 
 ### 7.4 加一种卡片操作
 
-批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1247`）和 `batchGroups()`（`index.html:990`）两处。新的批量动作需要在这两处都加分支。
+批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1297`）和 `batchGroups()`（`index.html:1026`）两处。新的批量动作需要在这两处都加分支。
 
 ---
 
@@ -386,11 +410,14 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 | 3 | 批量栏在 < 340px 极窄屏下文字截断 | 显示为「加入卡…」 | 已用 `text-overflow:ellipsis` 兜底，功能正常 |
 | 4 | 同一张卡并发修改会丢一方 | WebDAV 同步边缘情况 | last-write-wins 的固有代价 |
 | 5 | 卡片库列表滚动位置在视图切换后保留 | 可能不符合预期 | 与原实现一致，暂未改 |
-| 6 | `index.html` 单文件已达 1303 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
-| 7 | 示例数据在首次打开时自动写入 | 打开即有 13 张卡片 | 设计如此，可在「设置 → 清空」重置 |
-| 8 | APK 未做真机安装验证 | 首次装机可能遇到未预料的问题 | 构建机上无设备也无模拟器镜像，只做了静态验证（签名/对齐/badging/资源完整性）；接手后请装真机走一遍 §10.1 |
-| 9 | WebDAV 原生桥未在真机验证 | 原生分支能否真正绕过 CORS 未经证实 | 网页版的 `fetch` 分支已实测通过；原生分支需在真机上连一次真实 WebDAV 服务器才能确认 |
-| 10 | 系统栏 insets / 安全区未在真机验证 | 全面屏机型可能留白不均 | API 35 的 edge-to-edge 处理是按文档实现的，缺真机确认 |
+| 6 | `index.html` 单文件已达 1353 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
+| 7 | 示例数据在首次打开时自动写入 | 打开即有 3 张示例卡片 | 设计如此（3 张够看清形态又不淹没内容），「设置 → 清空全部数据」可一键清掉 |
+| 8 | 搜索面板不搜卡组名 | 只搜卡片正反面，搜不到「古诗文」这类卡组名 | 有意为之：卡组本来就能在菜单里直接选。要加的话改 `matchCards()` 一处即可 |
+| 9 | 搜索跳转统一落到「全部卡片」上下文 | 从某个卡组里搜到别的卡组的卡，跳过去后卡组变成了「全部卡片」 | 有意为之：搜索是跨卡组的，沿用当前卡组上下文会导致「看到的卡」和「搜到的卡」对不上 |
+| 10 | 清空数据不可撤销 | 手滑清空就没了 | 弹窗里已写明「无法撤销」；建议用户定期「导出 JSON」 |
+| 11 | APK 未做真机安装验证 | 首次装机可能遇到未预料的问题 | 构建机上无设备也无模拟器镜像，只做了静态验证（签名/对齐/badging/资源完整性）；接手后请装真机走一遍 §10.1 |
+| 12 | WebDAV 原生桥未在真机验证 | 原生分支能否真正绕过 CORS 未经证实 | 网页版的 `fetch` 分支已实测通过；原生分支需在真机上连一次真实 WebDAV 服务器才能确认 |
+| 13 | 系统栏 insets / 安全区未在真机验证 | 全面屏机型可能留白不均 | API 35 的 edge-to-edge 处理是按文档实现的，缺真机确认 |
 
 ---
 
@@ -443,13 +470,17 @@ python3 -m http.server 8777   # 在项目根目录
 
 逐项确认：
 
-- [ ] **背诵视图**：翻面、左右滑动切卡、上滑星标、下拉抽屉、键盘快捷键（空格 / ← → / S / D）
+- [ ] **背诵视图**：翻面、左右滑动切卡、上滑星标、点星标按钮、键盘快捷键（空格 / ← → / S / D）
+- [ ] **下拉搜索**：下拉能拉出搜索面板；输入关键词后正反面都能搜到、命中处有高亮；点结果能跳到那张卡；✕ 能关闭面板；点遮罩也能关
+- [ ] **星标**：卡片上的星标按钮能加/取消；卡组菜单里有「星标」入口（点进去只刷星标）；有星标时菜单底部出现「清空星标」
 - [ ] **卡片库**：卡组筛选、卡片增删改、批量模式（长列表 + 短列表各看一次底栏位置）
 - [ ] **设置**：主题切换、字号切换、WebDAV 测试连接与同步、导出 JSON / TXT、导入 JSON（覆盖与合并两种）
+- [ ] **清空数据**：设置 → 清空全部数据 → 卡片和卡组都归零，**刷新后仍然是 0**（不会被示例卡片重新灌回来）
+- [ ] **首次打开**：清掉 localStorage 后打开，只有 **3 张**示例卡片
 - [ ] **视口**：375×667（iPhone SE）、390×844（iPhone 14）、768×1024（平板）、桌面宽屏
 - [ ] **控制台**：无报错
 - [ ] **持久化**：刷新页面后卡片、星标、主题都还在
-- [ ] **宿主接口**：`window.Flashcards.back()` 能依次关闭弹窗 / 抽屉 / 菜单，没有浮层时返回 `false`
+- [ ] **宿主接口**：`window.Flashcards.back()` 能依次关闭弹窗 / 搜索面板 / 菜单，没有浮层时返回 `false`
 
 > 视口切换建议用浏览器的响应式模式，或直接改窗口宽度；`100dvh` 在移动端浏览器地址栏收起/展开时会变，务必在真机或模拟器上再看一眼。
 
@@ -462,7 +493,7 @@ cd android
 
 - [ ] **能装上、能启动**，图标与名称正常（应用名「闪过闪卡」）
 - [ ] **数据持久化**：加两张卡 → 杀掉进程 → 重开，卡片还在（这是虚拟 https 源方案的核心目的）
-- [ ] **返回键**：弹窗打开时返回键关弹窗；抽屉打开时关抽屉；都没有时退出应用
+- [ ] **返回键**：弹窗打开时返回键关弹窗；搜索面板打开时关面板；都没有时退出应用
 - [ ] **导出**：导出 JSON 后到系统「下载」目录能找到文件（走 MediaStore，免权限）
 - [ ] **WebDAV**：连一个真实的 WebDAV 服务器，测试连接 + 同步都正常（这条验的是原生 HTTP 桥，不是网页版的 fetch）
 - [ ] **状态栏**：切深浅主题，状态栏配色跟着变
@@ -497,11 +528,18 @@ A：装的是不同签名的版本。先 `adb uninstall com.amarisgo.flashcards`
 **Q：网页版和 APK 版的数据能互通吗？**
 A：不能。两者是各自独立的 localStorage（网页版按域名存，APK 版按 `https://flashcards.local/` 存）。要迁移只能走「导出 JSON → 导入 JSON」。
 
+**Q：点了「清空全部数据」，示例卡片怎么又回来了？**
+A：多半是只 `localStorage.removeItem(KEY)` 而没写回空数据。`load()` 只在 KEY **不存在**时才跑 `seed()`，
+所以正确做法是 `emptyContent(); save();` —— 写回一个 cards/groups 都为空的 store。见 §3.5。
+
+**Q：搜索面板里搜不到某个卡组的名字？**
+A：`matchCards()` 只匹配卡片的正面与背面，不搜卡组名。要加的话在那一个函数里补一段即可。
+
 ---
 
 ## 12. 接手后的第一个建议
 
-先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1303 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
+先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1353 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
 
 读完重点看这几处：
 
@@ -509,7 +547,8 @@ A：不能。两者是各自独立的 localStorage（网页版按域名存，APK
 2. `renderLib()` / `renderStudy()` —— 两个主视图的渲染
 3. `mergeStore()` —— 导入合并与 WebDAV 同步共用的核心
 4. `onDown` / `onMove` / `onUp` —— 手势系统，改动时最容易破坏手感
-5. `davFetch()` / `closeTopOverlay()` —— 两处宿主适配点，改动时要保证纯网页环境行为不变
+5. `matchCards()` / `markHit()` / `jumpToCard()` —— 搜索面板三件套，是唯一会拼 HTML 的地方，注意 `esc()`
+6. `davFetch()` / `closeTopOverlay()` —— 两处宿主适配点，改动时要保证纯网页环境行为不变
 
 然后从 README 的「验证清单」走一遍，确认环境正常，就可以动手了。
 

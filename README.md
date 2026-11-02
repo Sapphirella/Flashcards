@@ -14,8 +14,9 @@
 - 点击卡片翻面看答案
 - 左右滑动切卡，滑动跟手、带惯性
 - 上滑把卡片加入星标（卡片飞出动效）
-- 下拉打开星标抽屉，可「只刷星标」或一键清空
-- 键盘：`空格`/`Enter` 翻面 · `←`/`→` 切卡 · `S` 星标 · `D` 抽屉
+- 点卡片上的星标按钮可随时加/取消星标
+- 下拉拉出搜索面板，按关键词搜卡片正反面，命中处高亮，点结果直接跳到那张卡
+- 键盘：`空格`/`Enter` 翻面 · `←`/`→` 切卡 · `S` 星标 · `D` 搜索
 - 底部进度条显示当前进度与星标总数
 
 **卡片库**
@@ -28,7 +29,7 @@
 - 主题：浅色 / 深色 / 跟随系统
 - 字号：标准 / 大 / 特大
 - WebDAV 同步：测试连接、一键同步（双向合并，按 `updatedAt` 决胜）
-- 数据导入导出、清空全部数据
+- 数据导入导出、清空全部数据（连示例卡片一起清掉）
 - 卡片与卡组数量统计
 
 ## 快速开始
@@ -40,7 +41,7 @@ open index.html          # macOS
 xdg-open index.html      # Linux
 ```
 
-用浏览器打开 `index.html` 即可。首次打开会载入 13 张示例卡片（古诗文 / 单词 / 数理公式 / 文学常识），可在「设置 → 清空全部数据」中重置。
+用浏览器打开 `index.html` 即可。首次打开会载入 **3 张**示例卡片（古诗文 / 单词 / 数理公式各一张），看完样例后可在「设置 → 清空全部数据」一键清干净 —— 之后这个应用就是完全空白的，只装你自己的卡。
 
 ### 本地预览（推荐用于开发）
 
@@ -90,7 +91,7 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 | WebDAV 跨域被 CORS 拦下 | `window.Android.davRequest` 走原生 HTTP，不受同源策略约束 |
 | `HttpURLConnection` 不支持 `PROPFIND` | `SimpleHttp` 用 Socket 手写 HTTP/1.1，方法不受限 |
 | `<a download>` 导出在 WebView 里无效 | `window.Android.saveFile` 写入系统「下载」目录（免权限） |
-| 返回键直接退出应用 | 返回键先交给 `window.Flashcards.back()` 关闭弹窗 / 抽屉 / 菜单 |
+| 返回键直接退出应用 | 返回键先交给 `window.Flashcards.back()` 关闭弹窗 / 搜索面板 / 菜单 |
 | 依赖 Google Fonts，离线字体发不出来 | 移除 CDN 引用，Latin 字体内置为 woff2，中日韩用系统 Noto CJK |
 
 签名密钥在 `android/keystore/`，**不入库**，需自行生成（命令见 [android/README.md](android/README.md)）。
@@ -152,7 +153,7 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ```
 Flashcards/
-├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1303 行）
+├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1353 行）
 ├── README.md       # 本文件
 ├── HANDOVER.md     # 项目接手文档：架构、数据流、扩展指引、遗留问题
 ├── .gitignore      # 忽略 .DS_Store 等
@@ -164,24 +165,24 @@ Flashcards/
 
 | 分块 | 行号 | 内容 |
 | --- | --- | --- |
-| storage | 459 | localStorage 读写、键名常量 |
-| seed / migrate | 475 | 示例数据、v1 → v2 数据迁移 |
-| data helpers | 522 | `cardsOf` / `groupById` 等查询helper |
-| theme | 546 | 主题与字号应用 |
-| study view | 561 | 背诵视图渲染、翻面、切卡、星标 |
-| group menu | 653 | 卡组下拉菜单 |
-| star drawer | 684 | 星标抽屉 |
-| gestures | 705 | 指针手势：滑动切卡 / 上滑星标 / 下拉抽屉 |
-| library | 810 | 卡片库列表与批量栏渲染 |
-| modal | 858 | 通用弹窗框架 |
-| card editor | 893 | 新增 / 编辑卡片 |
-| group manager | 936 | 卡组增删改 |
-| batch group ops | 989 | 批量加入 / 移出卡组 |
-| import / export | 1014 | JSON / TXT 导入导出、数据合并 |
-| webdav | 1083 | WebDAV 连接测试与同步（`davFetch` 走原生桥或 fetch） |
-| views | 1139 | 视图切换、`closeTopOverlay` 浮层关闭 |
-| events | 1164 | 事件绑定与键盘快捷键 |
-| init | 1283 | 启动引导 |
+| storage | 462 | localStorage 读写、键名常量 |
+| seed / migrate | 478 | 3 张示例卡片、v1 → v2 数据迁移 |
+| data helpers | 525 | `cardsOf` / `groupById` 等查询helper |
+| theme | 549 | 主题与字号应用 |
+| study view | 564 | 背诵视图渲染、翻面、切卡、星标 |
+| group menu | 656 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
+| search sheet | 689 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
+| gestures | 741 | 指针手势：滑动切卡 / 上滑星标 / 下拉搜索 |
+| library | 846 | 卡片库列表与批量栏渲染 |
+| modal | 894 | 通用弹窗框架 |
+| card editor | 929 | 新增 / 编辑卡片 |
+| group manager | 972 | 卡组增删改 |
+| batch group ops | 1025 | 批量加入 / 移出卡组 |
+| import / export | 1050 | JSON / TXT 导入导出、数据合并 |
+| webdav | 1119 | WebDAV 连接测试与同步（`davFetch` 走原生桥或 fetch） |
+| views | 1175 | 视图切换、`closeTopOverlay` 浮层关闭 |
+| events | 1200 | 事件绑定与键盘快捷键 |
+| init | 1333 | 启动引导 |
 
 ## 开发约定
 
@@ -200,7 +201,7 @@ window.__fc       // { store, ui, render, renderLib, show }  调试用
 window.Flashcards // { view(): string, home(): void, back(): boolean }
 ```
 
-`Flashcards.back()` 会关闭最上层的浮层（弹窗 → 星标抽屉 → 卡组菜单），没有浮层可关时返回 `false` —— Android 宿主据此决定是「关浮层」还是「退出应用」。
+`Flashcards.back()` 会关闭最上层的浮层（弹窗 → 搜索面板 → 卡组菜单），没有浮层可关时返回 `false` —— Android 宿主据此决定是「关浮层」还是「退出应用」。
 
 `window.Android` 若存在会被自动使用：
 
