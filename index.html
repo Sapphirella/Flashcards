@@ -53,7 +53,6 @@ svg{display:block}
 #app{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .view{flex:1;display:none;flex-direction:column;min-height:0}
 .view.is-active{display:flex}
-.scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 
 /* ---------- topbar ---------- */
 .topbar{
@@ -202,7 +201,11 @@ svg{display:block}
 .btn:disabled{opacity:.45;cursor:default}
 
 /* ---------- library ---------- */
-.libhead{position:sticky;top:0;z-index:6;background:var(--bg)}
+/* 卡片库是「固定头部 + 独立滚动列表 + 固定底栏」的三段式布局。
+   底栏用 flex:none 锁定高度：一旦允许收缩，它会被压扁到只剩内边距，
+   按钮随即被 overflow 裁切，表现为底栏溢出屏幕外。 */
+.libhead{flex:none;z-index:6;background:var(--bg)}
+.libscroll{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .libbar{flex:none;display:flex;gap:8px;align-items:center;padding:4px 16px 10px;overflow-x:auto;overflow-y:hidden}
 .libbar::-webkit-scrollbar{display:none}
 .libchips{display:flex;gap:7px;flex:none}
@@ -214,7 +217,7 @@ svg{display:block}
 .cchip.is-picked{background:var(--green-tint);border-color:var(--green);color:var(--green-deep);font-weight:500}
 .cchip .x{display:inline-flex;width:13px;height:13px;align-items:center;justify-content:center;border-radius:50%;background:rgba(0,0,0,.08)}
 .cchip .x svg{width:9px;height:9px}
-.list{flex:none;overflow:visible;padding:0 16px 12px}
+.list{padding:0 16px 12px}
 .lrow{display:flex;gap:11px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line-soft)}
 .lrow__b{flex:1;min-width:0}
 .lrow__f{font-family:var(--serif);font-size:14.5px;line-height:1.5;font-weight:600;word-break:break-word}
@@ -235,11 +238,11 @@ svg{display:block}
 .ckbox.is-on{background:var(--green);border-color:var(--green)}
 .ckbox svg{width:12px;height:12px;color:#fff;opacity:0}
 .ckbox.is-on svg{opacity:1}
-.libfoot{position:sticky;bottom:0;z-index:5;flex:none;display:flex;gap:8px;padding:10px 16px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--line);background:var(--bg)}
+.libfoot{flex:none;display:flex;gap:8px;padding:10px 16px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--line);background:var(--bg)}
 .libfoot .btn{flex:1;height:34px;padding:0 10px;font-size:12.5px}
-.batchbar{position:sticky;bottom:0;z-index:5;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:10px 16px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--line);background:var(--bg)}
-.batchbar::-webkit-scrollbar{display:none}
-.batchbar .btn{flex:none;height:34px;font-size:12.5px}
+/* 批量操作栏：按钮按内容均分宽度，窄屏下收缩并省略号截断，绝不横向溢出 */
+.batchbar{flex:none;display:flex;gap:6px;padding:10px 16px calc(env(safe-area-inset-bottom) + 14px);border-top:1px solid var(--line);background:var(--bg)}
+.batchbar .btn{flex:1 1 auto;min-width:0;height:34px;padding:0 8px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- settings ---------- */
 .set{flex:1;min-height:0;overflow-y:auto;padding:0 16px 24px}
@@ -317,7 +320,7 @@ svg{display:block}
   </section>
 
   <!-- ===== 卡片库 ===== -->
-  <section class="view scroll" id="vLibrary">
+  <section class="view" id="vLibrary">
     <div class="libhead">
       <header class="topbar">
         <button class="iconbtn" id="libBack" aria-label="返回">
@@ -335,7 +338,9 @@ svg{display:block}
       </header>
       <div class="libbar"><div class="libchips" id="libChips"></div></div>
     </div>
-    <div class="list" id="libList"></div>
+    <div class="libscroll">
+      <div class="list" id="libList"></div>
+    </div>
 
     <div class="libfoot" id="libFoot">
       <button class="btn btn--ghost" id="btnImport">导入</button>
