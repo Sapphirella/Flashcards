@@ -188,7 +188,7 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ```
 Flashcards/
-├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1478 行）
+├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1530 行）
 ├── README.md       # 本文件
 ├── HANDOVER.md     # 项目接手文档：架构、数据流、扩展指引、遗留问题
 ├── .gitignore      # 忽略 .DS_Store 等
@@ -208,17 +208,17 @@ Flashcards/
 | study view | 577 | 背诵视图渲染、翻面、切卡、星标 |
 | group menu | 669 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
 | search sheet | 702 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
-| gestures | 754 | 指针手势：滑动切卡 / 卡内滚动避让 / 顶部 1/5 下拉搜索（见 HANDOVER §12） |
-| library | 874 | 卡片库列表与批量栏渲染 |
-| modal | 922 | 通用弹窗框架 |
-| card editor | 957 | 新增 / 编辑卡片 |
-| group manager | 1000 | 卡组增删改 |
-| batch group ops | 1053 | 批量加入 / 移出卡组 |
-| import / export | 1078 | JSON / TXT 导入导出、数据合并 |
-| webdav | 1147 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
-| views | 1297 | 视图切换、`closeTopOverlay` 浮层关闭 |
-| events | 1323 | 事件绑定与键盘快捷键 |
-| init | 1458 | 启动引导 |
+| gestures | 754 | 手势：滑动切卡 / 卡内滚动避让 / 顶部 1/5 下拉搜索；触摸走 touch 事件、鼠标走 pointer（见 HANDOVER §12） |
+| library | 926 | 卡片库列表与批量栏渲染 |
+| modal | 974 | 通用弹窗框架 |
+| card editor | 1009 | 新增 / 编辑卡片 |
+| group manager | 1052 | 卡组增删改 |
+| batch group ops | 1105 | 批量加入 / 移出卡组 |
+| import / export | 1130 | JSON / TXT 导入导出、数据合并 |
+| webdav | 1199 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
+| views | 1349 | 视图切换、`closeTopOverlay` 浮层关闭 |
+| events | 1375 | 事件绑定与键盘快捷键 |
+| init | 1510 | 启动引导 |
 
 ## 开发约定
 
@@ -227,6 +227,7 @@ Flashcards/
 - **渲染方式**：整块 `innerHTML` 重绘 + 事件委托（`data-*` 属性 + `closest()` 匹配）。不要在渲染出来的 DOM 上挂监听器。
 - **提交信息**：中文 Conventional Commits，如 `fix(library): 修复批量操作底栏溢出`、`feat(study): 增加卡片间隔提示`。
 - **改完必须验证**：至少跑一遍「背诵 → 卡片库 → 批量模式 → 设置」四个视图。
+- **碰手势的改动必须用触摸验证**：Chrome DevTools 设备模拟或真机滑一遍；鼠标拖拽走的是 pointer 路径，测不出触摸端的问题。
 
 ## 对外接口
 
@@ -249,13 +250,14 @@ window.Flashcards // { view(): string, home(): void, back(): boolean }
 
 后两个能力都通过 `davFetch()` 这层薄封装接入：**纯网页环境下 `window.Android` 为 undefined，行为与以前完全一致。**
 
-## 近期更新（v2.3）
+## 近期更新（v2.4）
 
 | 改动 | 之前 | 现在 |
 | --- | --- | --- |
 | 长内容卡片 | ❌ 超出卡片高度的部分被裁掉，看不到 | ✅ **卡片内部可滚动**，正反面都能滑到最后一个字；短内容仍居中 |
 | 上滑星标 | ⬆️ 在卡片上向上划会加星标 | ⬜ **手势已取消**，上滑不再有任何动作 |
 | 下拉搜索触发范围 | ⬇️ 任意位置下拉都会弹出搜索面板 | ✅ 只从**屏幕顶部 1/5** 处下拉才触发，卡片中部下滑不再误触 |
+| 触摸横滑 | ⚠️ v2.3 真机上划不动（pointer 事件被浏览器掐断） | ✅ v2.4 触摸手势改走 touch 事件，左右滑切卡恢复 |
 
 星标功能本身**不受影响**：卡片上的星标按钮、卡组菜单里的「星标」入口、菜单底部的「清空星标」都保留，
 键盘 `S` 也照常加星标。

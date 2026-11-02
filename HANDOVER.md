@@ -15,7 +15,7 @@
 | 决策 | 原因 |
 | --- | --- |
 | 单文件 | 整个应用就是一个网页，拷走 `index.html` 到任何地方都能用 —— 手机、U 盘、静态托管、离线打开 |
-| 不用框架 | 这个体量（~1478 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
+| 不用框架 | 这个体量（~1530 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
 | localStorage 存数据 | 零后端成本，且离线可用；用 WebDAV 解决多设备同步 |
 | 无构建 | 想改就改，保存刷新即生效，没有 `npm install` 门槛 |
 
@@ -27,7 +27,7 @@
 
 ```
 Flashcards/
-├── index.html          # 全部代码（HTML + CSS + JS，1478 行）
+├── index.html          # 全部代码（HTML + CSS + JS，1530 行）
 ├── README.md           # 项目说明：功能、数据格式、快速开始
 ├── HANDOVER.md         # 本文件
 ├── .gitignore
@@ -98,7 +98,7 @@ let ui = {
 | 函数 | 位置 | 负责 |
 | --- | --- | --- |
 | `renderStudy()` | `index.html:580` | 背诵视图：卡片正反面、进度条、底部计数 |
-| `renderLib()` | `index.html:875` | 卡片库：卡组 chips、卡片列表、批量栏 |
+| `renderLib()` | `index.html:927` | 卡片库：卡组 chips、卡片列表、批量栏 |
 | `renderSearch()` | `index.html:718` | 下拉搜索面板的结果列表 |
 
 **注意**：这些函数是**整块 `innerHTML` 替换**，不是局部更新。改完数据只要调用对应 `render*()` 即可，不需要手动刷新 DOM。
@@ -142,7 +142,7 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 ## 4. 模块地图（带行号）
 
-> 行号对应当前 `index.html`（1478 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
+> 行号对应当前 `index.html`（1530 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
 
 | 分块 | 行 | 要点 |
 | --- | --- | --- |
@@ -159,17 +159,17 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 | study view | 577 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` |
 | group menu | 669 | 卡组下拉菜单（含「星标」入口与「清空星标」） |
 | search sheet | 702 | 下拉搜索面板：`matchCards` / `markHit` / `renderSearch` / `jumpToCard` |
-| gestures | 754 | `scrollBoxAt` / `onDown` / `onMove` / `onUp`，阈值常量 `TH`；**本次已改造**，见 §12 |
-| library | 874 | `renderLib()` 渲染列表与批量栏 |
-| modal | 922 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
-| card editor | 957 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
-| group manager | 1000 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
-| batch ops | 1053 | `batchGroups(mode)` 批量加入/移出卡组 |
-| import/export | 1078 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
-| webdav | 1147 | `davFetch` / `davErrText` / `davEnsureDir` / `davTest` / `davSync` |
-| views | 1297 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
-| events | 1323 | 所有事件绑定、键盘快捷键 |
-| init | 1458 | 启动：load → applyTheme → render → 首次提示 |
+| gestures | 754 | `scrollBoxAt` / `gestureStart` / `gestureMove` / `gestureEnd`；触摸走 touch 事件、鼠标走 pointer，阈值常量 `TH`，见 §12 |
+| library | 926 | `renderLib()` 渲染列表与批量栏 |
+| modal | 974 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
+| card editor | 1009 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
+| group manager | 1052 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
+| batch ops | 1105 | `batchGroups(mode)` 批量加入/移出卡组 |
+| import/export | 1130 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
+| webdav | 1199 | `davFetch` / `davErrText` / `davEnsureDir` / `davTest` / `davSync` |
+| views | 1349 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
+| events | 1375 | 所有事件绑定、键盘快捷键 |
+| init | 1510 | 启动：load → applyTheme → render → 首次提示 |
 
 ### 关键函数速查
 
@@ -426,7 +426,7 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 | 正式 | `app/build/outputs/apk/release/app-release.apk` | `build/manual/out/flashcards-release.apk` | `com.amarisgo.flashcards` |
 | 调试 | `app/build/outputs/apk/debug/app-debug.apk` | `build/manual/out/flashcards-debug.apk` | `com.amarisgo.flashcards.debug` |
 
-配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 5 / versionName 2.3。
+配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 6 / versionName 2.4。
 
 - **minSdk 26（Android 8.0）**：这样只需要自适应图标（纯 XML），不必生成 PNG 位图。
 - **targetSdk 35 + 手动应用 systemBars insets 作为 padding**：API 35 强制 edge-to-edge，早期版本系统已内缩窗口、insets 为 0，两者统一处理不会重复留白。
@@ -465,7 +465,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 
 宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图、`Flashcards.back()` 关闭最上层浮层（弹窗 → 搜索面板 → 卡组菜单），没有浮层可关时返回 `false`。
 
-`closeTopOverlay()` 在 `index.html:1316`。
+`closeTopOverlay()` 在 `index.html:1368`。
 
 ---
 
@@ -481,20 +481,20 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 ### 7.2 加一个新视图
 
 1. 加 `<section class="view" id="vYourView">…</section>`，放在 `#app` 内。
-2. 在 `show(view)`（`index.html:1298`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
+2. 在 `show(view)`（`index.html:1350`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
 3. 加 `ui.yourview = ...` 状态。
 4. 记得给 `#app` 里的兄弟 section 留出空间（它们 `display:none`，不占位）。
 
 ### 7.3 加一条数据字段
 
 1. `seed()`（`index.html:495`）里给示例卡片补上新字段。
-2. `editCard()`（`index.html:969`）里加输入项，保存时写进对象。
-3. `mergeStore()`（`index.html:1105`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
+2. `editCard()`（`index.html:1021`）里加输入项，保存时写进对象。
+3. `mergeStore()`（`index.html:1157`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
 4. 如果字段会破坏兼容，考虑在 `load()` 里做默认值兜底。
 
 ### 7.4 加一种卡片操作
 
-批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1421`）和 `batchGroups()`（`index.html:1054`）两处。新的批量动作需要在这两处都加分支。
+批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1473`）和 `batchGroups()`（`index.html:1106`）两处。新的批量动作需要在这两处都加分支。
 
 ---
 
@@ -507,7 +507,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 | 3 | 批量栏在 < 340px 极窄屏下文字截断 | 显示为「加入卡…」 | 已用 `text-overflow:ellipsis` 兜底，功能正常 |
 | 4 | 同一张卡并发修改会丢一方 | WebDAV 同步边缘情况 | last-write-wins 的固有代价 |
 | 5 | 卡片库列表滚动位置在视图切换后保留 | 可能不符合预期 | 与原实现一致，暂未改 |
-| 6 | `index.html` 单文件已达 1478 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
+| 6 | `index.html` 单文件已达 1530 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
 | 7 | 示例数据在首次打开时自动写入 | 打开即有 3 张示例卡片 | 设计如此（3 张够看清形态又不淹没内容），「设置 → 清空全部数据」可一键清掉 |
 | 8 | 搜索面板不搜卡组名 | 只搜卡片正反面，搜不到「古诗文」这类卡组名 | 有意为之：卡组本来就能在菜单里直接选。要加的话改 `matchCards()` 一处即可 |
 | 9 | 搜索跳转统一落到「全部卡片」上下文 | 从某个卡组里搜到别的卡组的卡，跳过去后卡组变成了「全部卡片」 | 有意为之：搜索是跨卡组的，沿用当前卡组上下文会导致「看到的卡」和「搜到的卡」对不上 |
@@ -517,9 +517,9 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 | 13 | APK 未做真机安装验证 | 首次装机可能遇到未预料的问题 | 构建机上无设备也无模拟器镜像，只做了静态验证（签名/对齐/badging/资源完整性）；接手后请装真机走一遍 §10.1 |
 | 14 | WebDAV 原生桥未在真机验证 | 原生分支能否真正绕过 CORS 未经证实 | 网页版的 `fetch` 分支已用 `tools/` 里的测试服务器实测通过；原生分支需在真机上连一次真实 WebDAV 服务器才能确认 |
 | 15 | 系统栏 insets / 安全区未在真机验证 | 全面屏机型可能留白不均 | API 35 的 edge-to-edge 处理是按文档实现的，缺真机确认 |
-| 16 | ~~卡片内容过长时被裁掉，看不到全文~~ | 长卡片完全没法读 | **已修（v2.3）** —— 卡内正文改为 `overflow-y:auto`，正反面都能滚到最后一字；短内容仍然居中。见 §12.2 |
-| 17 | ~~上滑星标手势与「卡内竖向滚动」互相打架~~ | 两者都是纵向拖动，无法共存 | **已改（v2.3）** —— 取消上滑手势；星标保留手动按钮、键盘 `S`、菜单入口。见 §12.3 |
-| 18 | ~~下拉搜索在任意位置都会触发~~ | 卡片中部下滑容易误触出搜索面板 | **已改（v2.3）** —— 触发区收窄到视口顶部 1/5；可滚动的卡内正文不参与。见 §12.4 |
+| 16 | ~~卡片内容过长时被裁掉，看不到全文~~ | 长卡片完全没法读 | **已修（v2.4）** —— 卡内正文改为 `overflow-y:auto`，正反面都能滚到最后一字；短内容仍然居中。见 §12.2 |
+| 17 | ~~上滑星标手势与「卡内竖向滚动」互相打架~~ | 两者都是纵向拖动，无法共存 | **已改（v2.4）** —— 取消上滑手势；星标保留手动按钮、键盘 `S`、菜单入口。见 §12.3 |
+| 18 | ~~下拉搜索在任意位置都会触发~~ | 卡片中部下滑容易误触出搜索面板 | **已改（v2.4）** —— 触发区收窄到视口顶部 1/5；可滚动的卡内正文不参与。见 §12.4 |
 | 19 | 触摸手势只在无头 Chrome 里验证过 | iOS / Android 真机手感可能不同 | 滚动、边界、横滑、下拉均已自动化验证；**建议装机复走 §10.0** |
 
 ---
@@ -599,7 +599,8 @@ python3 -m http.server 8777   # 在项目根目录
 ### 10.0 本次版本专项（长内容滚动与手势改造，已实现）
 
 > 三项需求已完成，并通过无头 Chrome 的自动化验收：390×844 / 375×667 / 1280×900 三种视口，
-> 真实触摸事件验证原生滚动与点按，合成 `PointerEvent` 验证手势状态机。
+> **手势全部用真实触摸事件（CDP `Input.dispatchTouchEvent`）驱动**，覆盖滚动、横滑、上滑、
+> 中部/顶部下拉、点按与星标；鼠标 pointer 路径单独验一次。
 > 验收脚本没有入库（它依赖本机 Chrome + CDP），回归时按下面清单手动走一遍。
 > **真机触摸手感仍需装机确认**，见最后一条。
 
@@ -607,8 +608,9 @@ python3 -m http.server 8777   # 在项目根目录
 - [x] **卡内滚动不串手势**：在卡内竖向滑不会翻面、不会切卡、不会拉出搜索面板；横向滑仍然能切卡
 - [x] **上滑无手势**：在卡片上往上划，什么都不发生（不加星标、卡片不动）
 - [x] **下拉触发区**：只有从**视口顶部 1/5 以内**下拉才拉出搜索面板；卡片中部下拉毫无反应
-- [x] **边界一致**：全流程只有 `onDown` 里一处判定 `e.clientY < window.innerHeight * 0.2`；390×844 下 129px 触发、209px 不触发
+- [x] **边界一致**：全流程只有 `gestureStart` 里一处判定 `e.clientY < window.innerHeight * 0.2`；390×844 下 129px 触发、209px 不触发
 - [x] **下拉位移阈值**：顶部起手但下拉不足 `TH.searchPx`(80px) 时，面板吸附收回、不展开
+- [x] **触摸横滑**：真实触摸事件下左/右滑都能切卡（v2.4 修复；鼠标拖拽不算验证）
 - [ ] **真机复检**：iOS Safari 与 Android WebView 各走一遍；重点看长卡滚动惯性、滚动结束手一松不会误翻面
 
 > 视口切换建议用浏览器的响应式模式，或直接改窗口宽度；`100dvh` 在移动端浏览器地址栏收起/展开时会变，务必在真机或模拟器上再看一眼。
@@ -680,20 +682,20 @@ A：按顺序查三件事：
 A：`matchCards()` 只匹配卡片的正面与背面，不搜卡组名。要加的话在那一个函数里补一段即可。
 
 **Q：卡片内容太长，看不全？**
-A：v2.3 起卡内正文可以上下滑动（正反面都是），短内容仍然垂直居中。若仍然看不到，
+A：v2.4 起卡内正文可以上下滑动（正反面都是），短内容仍然垂直居中。若仍然看不到，
 先确认是不是在卡片库列表里看 —— 列表只显示一行摘要，全文要去背诵视图看。
 
 **Q：在卡片上往上划，怎么没反应了？**
-A：上滑星标已在 v2.3 取消。它和「卡内竖向滚动」抢同一个手势，必须让位给滚动。
+A：上滑星标已在 v2.4 取消。它和「卡内竖向滚动」抢同一个手势，必须让位给滚动。
 加星标请用：卡片左下角的星标按钮、键盘 `S`、或卡组菜单里的「星标」入口。
 
 **Q：下拉搜索拉不出来了？**
-A：v2.3 起触发区收窄到**视口顶部 1/5**：从顶栏下方那条窄带向下拉才会出面板。
+A：v2.4 起触发区收窄到**视口顶部 1/5**：从顶栏下方那条窄带向下拉才会出面板。
 在卡片中部下拉、或在长卡正文里下滑，都不会触发（那是滚动）。
 
 ---
 
-## 12. 长内容卡片与手势改造（v2.3 已实现）
+## 12. 长内容卡片与手势改造（v2.4 已实现）
 
 > 这一节原先是「已确认需求、尚未实现」的设计稿。三项需求现在都落地了，
 > 保留下来是因为其中**两个坑不看文档一定会踩**：
@@ -703,11 +705,11 @@ A：v2.3 起触发区收窄到**视口顶部 1/5**：从顶栏下方那条窄带
 
 ### 12.1 三项需求与落点
 
-| 需求 | v2.3 的行为 | 主要代码位置 |
+| 需求 | v2.4 的行为 | 主要代码位置 |
 | --- | --- | --- |
 | 卡片内容太长看不全 | 卡内正文可上下滑到最后一字，正反面都是；短内容仍垂直居中 | `.face__body`（`index.html:100-107`） |
-| 取消上滑星标 | 卡片上向上划什么都不发生；星标保留按钮 / 键盘 `S` / 菜单入口 | `onMove`（`index.html:784`）、`onUp`（`index.html:809`） |
-| 下拉搜索限定顶部 1/5 | 只有起点在视口顶部 20% 内、且向下拉才唤出搜索 | `onDown`（`index.html:769`）、`onMove`（`index.html:784`） |
+| 取消上滑星标 | 卡片上向上划什么都不发生；星标保留按钮 / 键盘 `S` / 菜单入口 | `gestureMove`（`index.html:790`）、`gestureEnd`（`index.html:818`） |
+| 下拉搜索限定顶部 1/5 | 只有起点在视口顶部 20% 内、且向下拉才唤出搜索 | `gestureStart`（`index.html:776`）、`gestureMove`（`index.html:790`） |
 
 ### 12.2 卡内滚动（改动一）
 
@@ -728,7 +730,7 @@ A：v2.3 起触发区收窄到**视口顶部 1/5**：从顶栏下方那条窄带
 **3D 翻转不影响滚动**：`.face` 自己带 `overflow:hidden`，已经把它变成 2D 上下文；
 `rotateY(180deg)` 的背面照样能滚（已实测）。
 
-**手势避让**（`scrollBoxAt()`，`index.html:763`）：
+**手势避让**（`scrollBoxAt()`，`index.html:770`）：
 
 ```js
 function scrollBoxAt(target){
@@ -738,15 +740,20 @@ function scrollBoxAt(target){
 }
 ```
 
-- `onDown` 时把命中的可滚正文存进 `g.scroll`。
-- `onMove` 里纵向拖动若 `g.scroll` 存在，**不设任何 mode**，整段交给原生滚动；
+- `gestureStart` 时把命中的可滚正文存进 `g.scroll`。
+- `gestureMove` 里纵向拖动若 `g.scroll` 存在，**不设任何 mode**，整段交给原生滚动；
   横向仍然可以进 `'swipe'`。
-- `onUp` 比较 `scrollTop` 是否变化，变化过就把 `lastMoved` 拉高，避免滚动结束手一松就翻面。
+- `gestureEnd` 比较 `scrollTop` 是否变化，变化过就把 `lastMoved` 拉高，避免滚动结束手一松就翻面。
 
-> ⚠️ 浏览器开始原生滚动后会派发 `pointercancel`，而该事件的 `clientX/clientY` 是 **0**。
-> 现在的 `onUp` 用最后一次 `pointermove` 的坐标（`g.lastX/g.lastY`）结算；
-> 搜索面板则明确拒绝在 `pointercancel` 时展开。没有这两个处理，一个已经划出去的横滑
-> 会被算成反向猛滑（自动化验收时实测踩到）。
+> ⚠️ **触摸手势必须走 touch 事件，不能只靠 pointer 事件。**
+> v2.3 的横滑只在鼠标 / 合成 PointerEvent 下通过，真机上「划一半就断」：浏览器一旦
+> 接管手势（原生滚动 / 系统手势）就会给页面发 `pointercancel`，之后的 `pointermove`
+> 全部停止，切卡永远到不了阈值。v2.4 的触摸路径改由 `touchstart/touchmove/touchend`
+> 驱动（`touchmove` 用 `{passive:false}`，判定为横向后 `preventDefault()`）；
+> pointer 事件只保留给鼠标与触控笔。两条路径共用
+> `gestureStart / gestureMove / gestureEnd` 同一份状态机。
+> 被取消时（`touchcancel` / `pointercancel`）不结算成切卡或搜索；坐标不可靠时用最后一次
+> move 的位置兜底。**回归必须用真实触摸或 DevTools 触摸模拟，鼠标测不出这个问题。**
 
 **验收（已自动跑过）**：正面 34 行 / 背面 40 行的卡片都能滚到最后一字；
 滚动过程中不翻面、不切卡、不出搜索、不加星标；短卡片仍居中。
@@ -800,14 +807,14 @@ g.mode = g.scroll ? null : ((dy>0 && g.fromTop) ? 'search' : null);
 2. 卡内滚动 + 手势避让（CSS + JS 一起改）
 3. 下拉触发区收窄（依赖前两步稳定后的状态机）
 
-完成后的动作：更新 §10.0 / §8 → 刷新行号 → README 的路线图改成「已实现」→ 版本号 2.3 → 重出 APK。
+完成后的动作：更新 §10.0 / §8 → 刷新行号 → README 的路线图改成「已实现」→ 版本号 2.4 → 重出 APK。
 
 ### 12.6 回归时重点看什么
 
 - **`pointercancel`**：在真机长卡上快速滚动后立刻松手，卡片不应翻面、不应切卡。
 - **卡内边界**：滚到顶部/底部继续拖，不应带出搜索面板（`overscroll-behavior:contain` 负责）。
 - **顶部 1/5**：不同 `100dvh`（地址栏收起/展开）下判定是否仍合理。
-- **横滑**：长卡正文上横向滑动仍应切卡，纵向滑动只滚内容。
+- **横滑**：长卡正文上横向滑动仍应切卡，纵向滑动只滚内容。**必须用触摸模拟/真机验**，鼠标测不出 `pointercancel` 那条路径。
 
 ---
 
@@ -815,7 +822,7 @@ g.mode = g.scroll ? null : ((dy>0 && g.fromTop) ? 'search' : null);
 
 > §12 的三项改造已经完成。先按 §10.0 在真机上复检手势手感，再决定下一步。
 
-先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1478 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
+先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1530 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
 
 读完重点看这几处：
 
