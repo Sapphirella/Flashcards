@@ -2,6 +2,8 @@
 
 一个纯前端的闪卡速记应用。单文件、零依赖、零构建 —— 双击 `index.html` 就能用。
 
+源码仓库：[github.com/Sapphirella/Flashcards](https://github.com/Sapphirella/Flashcards)（`main` 分支）
+
 数据全部存在浏览器本地（localStorage），可选通过 WebDAV 在多设备间同步。
 
 <img src="docs/images/study.jpg" width="260" alt="背诵视图" />

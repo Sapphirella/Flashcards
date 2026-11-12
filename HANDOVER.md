@@ -527,12 +527,15 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 ## 9. Git 工作流
 
 仓库已初始化，分支为 `main`（如需 PR 流程可再开分支）。
+远程仓库 `origin` 指向 `git@github.com:Sapphirella/Flashcards.git`，`main` 已跟踪 `origin/main`；
+日常改完直接 `git push` 即可。GitHub 页面：<https://github.com/Sapphirella/Flashcards>。
 
 ```bash
 git status                 # 看改动
 git diff                   # 看具体差异
 git add -A && git commit   # 提交
 git log --oneline          # 看历史
+git push                   # 推到 origin/main
 ```
 
 **提交信息规范**：中文 Conventional Commits。
