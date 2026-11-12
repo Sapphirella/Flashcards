@@ -15,7 +15,7 @@
 | 决策 | 原因 |
 | --- | --- |
 | 单文件 | 整个应用就是一个网页，拷走 `index.html` 到任何地方都能用 —— 手机、U 盘、静态托管、离线打开 |
-| 不用框架 | 这个体量（~1530 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
+| 不用框架 | 这个体量（~1536 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
 | localStorage 存数据 | 零后端成本，且离线可用；用 WebDAV 解决多设备同步 |
 | 无构建 | 想改就改，保存刷新即生效，没有 `npm install` 门槛 |
 
@@ -27,7 +27,7 @@
 
 ```
 Flashcards/
-├── index.html          # 全部代码（HTML + CSS + JS，1530 行）
+├── index.html          # 全部代码（HTML + CSS + JS，1536 行）
 ├── README.md           # 项目说明：功能、数据格式、快速开始
 ├── HANDOVER.md         # 本文件
 ├── .gitignore
@@ -66,7 +66,7 @@ Flashcards/
 
 ### 3.2 状态
 
-只有两个全局状态对象（`index.html:475` 起）：
+只有两个全局状态对象（`index.html:481` 起）：
 
 ```js
 let store = null;   // 业务数据：{version, cards[], groups[], settings{}}
@@ -97,9 +97,9 @@ let ui = {
 
 | 函数 | 位置 | 负责 |
 | --- | --- | --- |
-| `renderStudy()` | `index.html:580` | 背诵视图：卡片正反面、进度条、底部计数 |
-| `renderLib()` | `index.html:927` | 卡片库：卡组 chips、卡片列表、批量栏 |
-| `renderSearch()` | `index.html:718` | 下拉搜索面板的结果列表 |
+| `renderStudy()` | `index.html:586` | 背诵视图：卡片正反面、进度条、底部计数 |
+| `renderLib()` | `index.html:933` | 卡片库：卡组 chips、卡片列表、批量栏 |
+| `renderSearch()` | `index.html:724` | 下拉搜索面板的结果列表 |
 
 **注意**：这些函数是**整块 `innerHTML` 替换**，不是局部更新。改完数据只要调用对应 `render*()` 即可，不需要手动刷新 DOM。
 
@@ -126,11 +126,11 @@ const OLD_KEY  = 'flashcards.v1';   // 旧版本（仅迁移用）
 const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 ```
 
-- `load()`（`index.html:523`）：依次尝试读 v2 → 读 v1 并迁移 → 都没有就 `seed()` 写示例数据。
-- `save(data)`（`index.html:534`）：`localStorage.setItem(KEY, JSON.stringify(data || store))`，**包了 try/catch**，写入失败（隐私模式、配额满）时静默忽略。
-- `migrateV1()`（`index.html:514`）：把 v1 的 `decks[]` 结构转成 v2 的 `groups[] + cards[].groups[]`。
-- `seed()`（`index.html:495`）：只在**从未存过数据**时跑一次，写 3 张示例卡片 + 3 个示例卡组。
-- `emptyContent()`（`index.html:509`）：清空卡片与卡组，保留外观与 WebDAV 设置。「设置 → 清空全部数据」调的是它。
+- `load()`（`index.html:529`）：依次尝试读 v2 → 读 v1 并迁移 → 都没有就 `seed()` 写示例数据。
+- `save(data)`（`index.html:540`）：`localStorage.setItem(KEY, JSON.stringify(data || store))`，**包了 try/catch**，写入失败（隐私模式、配额满）时静默忽略。
+- `migrateV1()`（`index.html:520`）：把 v1 的 `decks[]` 结构转成 v2 的 `groups[] + cards[].groups[]`。
+- `seed()`（`index.html:501`）：只在**从未存过数据**时跑一次，写 3 张示例卡片 + 3 个示例卡组。
+- `emptyContent()`（`index.html:515`）：清空卡片与卡组，保留外观与 WebDAV 设置。「设置 → 清空全部数据」调的是它。
 
 > ⚠️ **清空数据要写回一个「空 store」，而不是 `localStorage.removeItem(KEY)`。**
 > `load()` 只在 KEY **不存在**时才会跑 `seed()`；如果只是删掉 KEY 而不写回空数据，
@@ -142,7 +142,7 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 ## 4. 模块地图（带行号）
 
-> 行号对应当前 `index.html`（1530 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
+> 行号对应当前 `index.html`（1536 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
 
 | 分块 | 行 | 要点 |
 | --- | --- | --- |
@@ -150,26 +150,26 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 | 布局骨架 | 53–55 | `#app` / `.view` |
 | 背诵视图样式 | 75–143 | 卡片 3D 翻面、滑动、**卡内滚动**（`.face__body`）、飞入飞出关键帧 |
 | 浮层样式 | 145–212 | 遮罩、菜单、**搜索面板**、弹窗、按钮 |
-| 卡片库样式 | 214–256 | **批量栏修复重点**，见 §5 |
-| 设置样式 | 258–298 | 分组卡片、开关行、WebDAV 备份位置、坚果云提示、toast / 空状态 |
-| storage | 475 | key 常量、`uid()`、`esc()`、`toast()`、`fmt()` |
-| seed / migrate | 491 | **3 张**示例卡片、3 个示例卡组、v1 迁移、`emptyContent()` |
-| data helpers | 538 | `cardsOf(gid)` 是**最核心的查询函数** |
-| theme | 562 | `applyTheme()` 应用主题 + 同步状态栏 |
-| study view | 577 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` |
-| group menu | 669 | 卡组下拉菜单（含「星标」入口与「清空星标」） |
-| search sheet | 702 | 下拉搜索面板：`matchCards` / `markHit` / `renderSearch` / `jumpToCard` |
-| gestures | 754 | `scrollBoxAt` / `gestureStart` / `gestureMove` / `gestureEnd`；触摸走 touch 事件、鼠标走 pointer，阈值常量 `TH`，见 §12 |
-| library | 926 | `renderLib()` 渲染列表与批量栏 |
-| modal | 974 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
-| card editor | 1009 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
-| group manager | 1052 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
-| batch ops | 1105 | `batchGroups(mode)` 批量加入/移出卡组 |
-| import/export | 1130 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
-| webdav | 1199 | `davFetch` / `davErrText` / `davEnsureDir` / `davTest` / `davSync` |
-| views | 1349 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
-| events | 1375 | 所有事件绑定、键盘快捷键 |
-| init | 1510 | 启动：load → applyTheme → render → 首次提示 |
+| 卡片库样式 | 214–262 | **批量栏修复重点**，见 §5 |
+| 设置样式 | 264–304 | 分组卡片、开关行、WebDAV 备份位置、坚果云提示、toast / 空状态 |
+| storage | 481 | key 常量、`uid()`、`esc()`、`toast()`、`fmt()` |
+| seed / migrate | 497 | **3 张**示例卡片、3 个示例卡组、v1 迁移、`emptyContent()` |
+| data helpers | 544 | `cardsOf(gid)` 是**最核心的查询函数** |
+| theme | 568 | `applyTheme()` 应用主题 + 同步状态栏 |
+| study view | 583 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` |
+| group menu | 675 | 卡组下拉菜单（含「星标」入口与「清空星标」） |
+| search sheet | 708 | 下拉搜索面板：`matchCards` / `markHit` / `renderSearch` / `jumpToCard` |
+| gestures | 760 | `scrollBoxAt` / `gestureStart` / `gestureMove` / `gestureEnd`；触摸走 touch 事件、鼠标走 pointer，阈值常量 `TH`，见 §12 |
+| library | 932 | `renderLib()` 渲染列表与批量栏 |
+| modal | 980 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
+| card editor | 1015 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
+| group manager | 1058 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
+| batch ops | 1111 | `batchGroups(mode)` 批量加入/移出卡组 |
+| import/export | 1136 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
+| webdav | 1205 | `davFetch` / `davErrText` / `davEnsureDir` / `davTest` / `davSync` |
+| views | 1355 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
+| events | 1381 | 所有事件绑定、键盘快捷键 |
+| init | 1516 | 启动：load → applyTheme → render → 首次提示 |
 
 ### 关键函数速查
 
@@ -426,7 +426,7 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 | 正式 | `app/build/outputs/apk/release/app-release.apk` | `build/manual/out/flashcards-release.apk` | `com.amarisgo.flashcards` |
 | 调试 | `app/build/outputs/apk/debug/app-debug.apk` | `build/manual/out/flashcards-debug.apk` | `com.amarisgo.flashcards.debug` |
 
-配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 6 / versionName 2.4。
+配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 7 / versionName 2.5。
 
 - **minSdk 26（Android 8.0）**：这样只需要自适应图标（纯 XML），不必生成 PNG 位图。
 - **targetSdk 35 + 手动应用 systemBars insets 作为 padding**：API 35 强制 edge-to-edge，早期版本系统已内缩窗口、insets 为 0，两者统一处理不会重复留白。
@@ -465,7 +465,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 
 宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图、`Flashcards.back()` 关闭最上层浮层（弹窗 → 搜索面板 → 卡组菜单），没有浮层可关时返回 `false`。
 
-`closeTopOverlay()` 在 `index.html:1368`。
+`closeTopOverlay()` 在 `index.html:1374`。
 
 ---
 
@@ -481,20 +481,20 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 ### 7.2 加一个新视图
 
 1. 加 `<section class="view" id="vYourView">…</section>`，放在 `#app` 内。
-2. 在 `show(view)`（`index.html:1350`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
+2. 在 `show(view)`（`index.html:1356`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
 3. 加 `ui.yourview = ...` 状态。
 4. 记得给 `#app` 里的兄弟 section 留出空间（它们 `display:none`，不占位）。
 
 ### 7.3 加一条数据字段
 
-1. `seed()`（`index.html:495`）里给示例卡片补上新字段。
-2. `editCard()`（`index.html:1021`）里加输入项，保存时写进对象。
-3. `mergeStore()`（`index.html:1157`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
+1. `seed()`（`index.html:501`）里给示例卡片补上新字段。
+2. `editCard()`（`index.html:1027`）里加输入项，保存时写进对象。
+3. `mergeStore()`（`index.html:1163`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
 4. 如果字段会破坏兼容，考虑在 `load()` 里做默认值兜底。
 
 ### 7.4 加一种卡片操作
 
-批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1473`）和 `batchGroups()`（`index.html:1106`）两处。新的批量动作需要在这两处都加分支。
+批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1479`）和 `batchGroups()`（`index.html:1112`）两处。新的批量动作需要在这两处都加分支。
 
 ---
 
@@ -507,7 +507,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 | 3 | 批量栏在 < 340px 极窄屏下文字截断 | 显示为「加入卡…」 | 已用 `text-overflow:ellipsis` 兜底，功能正常 |
 | 4 | 同一张卡并发修改会丢一方 | WebDAV 同步边缘情况 | last-write-wins 的固有代价 |
 | 5 | 卡片库列表滚动位置在视图切换后保留 | 可能不符合预期 | 与原实现一致，暂未改 |
-| 6 | `index.html` 单文件已达 1530 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
+| 6 | `index.html` 单文件已达 1536 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
 | 7 | 示例数据在首次打开时自动写入 | 打开即有 3 张示例卡片 | 设计如此（3 张够看清形态又不淹没内容），「设置 → 清空全部数据」可一键清掉 |
 | 8 | 搜索面板不搜卡组名 | 只搜卡片正反面，搜不到「古诗文」这类卡组名 | 有意为之：卡组本来就能在菜单里直接选。要加的话改 `matchCards()` 一处即可 |
 | 9 | 搜索跳转统一落到「全部卡片」上下文 | 从某个卡组里搜到别的卡组的卡，跳过去后卡组变成了「全部卡片」 | 有意为之：搜索是跨卡组的，沿用当前卡组上下文会导致「看到的卡」和「搜到的卡」对不上 |
@@ -708,8 +708,8 @@ A：v2.4 起触发区收窄到**视口顶部 1/5**：从顶栏下方那条窄带
 | 需求 | v2.4 的行为 | 主要代码位置 |
 | --- | --- | --- |
 | 卡片内容太长看不全 | 卡内正文可上下滑到最后一字，正反面都是；短内容仍垂直居中 | `.face__body`（`index.html:100-107`） |
-| 取消上滑星标 | 卡片上向上划什么都不发生；星标保留按钮 / 键盘 `S` / 菜单入口 | `gestureMove`（`index.html:790`）、`gestureEnd`（`index.html:818`） |
-| 下拉搜索限定顶部 1/5 | 只有起点在视口顶部 20% 内、且向下拉才唤出搜索 | `gestureStart`（`index.html:776`）、`gestureMove`（`index.html:790`） |
+| 取消上滑星标 | 卡片上向上划什么都不发生；星标保留按钮 / 键盘 `S` / 菜单入口 | `gestureMove`（`index.html:796`）、`gestureEnd`（`index.html:824`） |
+| 下拉搜索限定顶部 1/5 | 只有起点在视口顶部 20% 内、且向下拉才唤出搜索 | `gestureStart`（`index.html:782`）、`gestureMove`（`index.html:796`） |
 
 ### 12.2 卡内滚动（改动一）
 
@@ -730,7 +730,7 @@ A：v2.4 起触发区收窄到**视口顶部 1/5**：从顶栏下方那条窄带
 **3D 翻转不影响滚动**：`.face` 自己带 `overflow:hidden`，已经把它变成 2D 上下文；
 `rotateY(180deg)` 的背面照样能滚（已实测）。
 
-**手势避让**（`scrollBoxAt()`，`index.html:770`）：
+**手势避让**（`scrollBoxAt()`，`index.html:776`）：
 
 ```js
 function scrollBoxAt(target){
@@ -770,9 +770,9 @@ function scrollBoxAt(target){
 
 **保留不动**（星标功能不受影响）：
 
-- `starCurrent()`（`index.html:653`）—— 键盘 `S` 调用，仍带「卡片飞上去」动效
-- `toggleStar()`（`index.html:645`）—— 卡片上的星标按钮
-- 卡组菜单的「星标」入口与「清空星标」（`openDeckMenu()`，`index.html:670`）
+- `starCurrent()`（`index.html:659`）—— 键盘 `S` 调用，仍带「卡片飞上去」动效
+- `toggleStar()`（`index.html:651`）—— 卡片上的星标按钮
+- 卡组菜单的「星标」入口与「清空星标」（`openDeckMenu()`，`index.html:676`）
 - `.is-fly-up` 与 `flyUp` 关键帧
 
 **取舍**：手动点星标按钮只有 `pop` 图标动效，没有飞卡动效（原本就没有）。
@@ -822,7 +822,7 @@ g.mode = g.scroll ? null : ((dy>0 && g.fromTop) ? 'search' : null);
 
 > §12 的三项改造已经完成。先按 §10.0 在真机上复检手势手感，再决定下一步。
 
-先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1530 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
+先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1536 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
 
 读完重点看这几处：
 
@@ -845,3 +845,58 @@ python3 -m http.server 8777 &
 ```
 
 如果你要动 APK 相关的东西，再花 10 分钟读一遍 `android/README.md` 和本文件 §6.2 —— 那里记了宿主架构、桥接协议和**尚未验证的部分**（真机、原生 WebDAV 桥都还没在真机上跑过）。
+
+---
+
+## 14. 卡片库摘要截断（v2.5 已实现）
+
+### 14.1 需求
+
+卡片正面/背面越写越长，卡片库里每行把背面全文铺开，卡片一多列表就被撑得很高、很难翻。
+要求**详情小字（背面摘要）只显示前 4 行**。
+
+### 14.2 实现
+
+只改 CSS，`.lrow__k` 用 `-webkit-line-clamp` 收口：
+
+```css
+.lrow__k{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:4;
+  overflow:hidden;
+}
+```
+
+普通模式与批量模式共用同一个 `.lrow__k`（`renderLib()` 两处模板），所以一处改动两个模式同时生效；
+没有改渲染结构、没有加 JS。
+
+**为什么不用 `max-height`**：`max-height:calc(1.5em * 4)` 会把第 4 行从中间裁断，而且没有省略号，
+看起来像渲染坏了。`line-clamp` 按行盒计算，会在第 4 行末尾自动补省略号。
+
+### 14.3 行为边界
+
+| 情况 | 表现 |
+| --- | --- |
+| 摘要 ≤ 4 行 | 原样显示，行数少时行高也小 |
+| 摘要 > 4 行 | 只露前 4 行，第 4 行末尾省略号 |
+| 超长无换行文本 | `word-break:break-word` 先折行，再按 4 行截断 |
+| 批量模式 | 同样只显示 4 行 |
+| 查看全文 | 点该卡片的「编辑」按钮，在弹窗里看完整背面 |
+
+### 14.4 验收（无头 Chrome，390×844）
+
+构造 1 行、4 行、7 行、超长无换行四类摘要后实测：
+
+- `.lrow__k` 的 `clientHeight` 最大 `72px`（`12px × 1.5 × 4`），第 5 行起不可见；
+- 长文本的 `scrollHeight > clientHeight`，但可视高度被钳在 4 行；
+- 第 4 行末尾出现省略号（截图确认）；
+- `document.documentElement.scrollWidth === clientWidth === 390`，无横向溢出；
+- 短摘要（1 行）高度仍为 `18px`，没有被强行拉成 4 行。
+
+### 14.5 后续可选
+
+- **列表内展开**：点 `.lrow__k` 切换一行 `.is-open{ -webkit-line-clamp:unset }`。要做的话得把点击区
+  和行内星标/编辑/删除按钮分开（用 `closest` 排除按钮），并决定是否记忆展开状态。
+- **可配置行数**：把 `4` 换成 CSS 变量 `--lib-lines:4`，设置页再加一个「卡片库摘要行数」选项。
+  当前需求只要求 4 行，先不引入设置项。

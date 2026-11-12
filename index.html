@@ -232,7 +232,13 @@ svg{display:block}
 .lrow{display:flex;gap:11px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line-soft)}
 .lrow__b{flex:1;min-width:0}
 .lrow__f{font-family:var(--serif);font-size:14.5px;line-height:1.5;font-weight:600;word-break:break-word}
-.lrow__k{font-size:12px;color:var(--muted);line-height:1.5;margin-top:3px;word-break:break-word}
+/* 卡片库只展示背面摘要的前 4 行：长卡片不再把列表撑得老高，超出部分用省略号收尾。
+   用 -webkit-box + line-clamp 而不是 max-height，后者会把第 4 行从中间裁断、且没有省略号。
+   全文仍可在「编辑」弹窗里看到。 */
+.lrow__k{
+  font-size:12px;color:var(--muted);line-height:1.5;margin-top:3px;word-break:break-word;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden;
+}
 .lrow__k.is-empty{opacity:.5}
 .lrow__g{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .gtag{
@@ -428,7 +434,7 @@ svg{display:block}
       <div class="group">
         <div class="group__t">关于</div>
         <div class="rows">
-          <div class="row"><span class="row__l">版本</span><span class="row__v">2.4</span></div>
+          <div class="row"><span class="row__l">版本</span><span class="row__v">2.5</span></div>
           <div class="row"><span class="row__l">卡片</span><span class="row__v" id="statCards">0</span></div>
           <div class="row"><span class="row__l">卡组</span><span class="row__v" id="statGroups">0</span></div>
         </div>

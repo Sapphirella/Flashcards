@@ -22,6 +22,7 @@
 **卡片库**
 - 按卡组筛选卡片，卡组名横向滑动
 - 新增 / 编辑 / 删除卡片，一卡可归属多个卡组
+- 背面摘要**只显示前 4 行**，超出用省略号收尾，长卡片不再把列表撑高（全文点「编辑」查看）
 - 批量模式：多选后批量加入卡组、移出卡组、删除
 - 导入 / 导出 JSON、导出 TXT（按卡组分节）
 
@@ -188,7 +189,7 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ```
 Flashcards/
-├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1530 行）
+├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1536 行）
 ├── README.md       # 本文件
 ├── HANDOVER.md     # 项目接手文档：架构、数据流、扩展指引、遗留问题
 ├── .gitignore      # 忽略 .DS_Store 等
@@ -201,24 +202,24 @@ Flashcards/
 
 | 分块 | 行号 | 内容 |
 | --- | --- | --- |
-| storage | 475 | localStorage 读写、键名常量 |
-| seed / migrate | 491 | 3 张示例卡片、v1 → v2 数据迁移 |
-| data helpers | 538 | `cardsOf` / `groupById` 等查询helper |
-| theme | 562 | 主题与字号应用 |
-| study view | 577 | 背诵视图渲染、翻面、切卡、星标 |
-| group menu | 669 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
-| search sheet | 702 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
-| gestures | 754 | 手势：滑动切卡 / 卡内滚动避让 / 顶部 1/5 下拉搜索；触摸走 touch 事件、鼠标走 pointer（见 HANDOVER §12） |
-| library | 926 | 卡片库列表与批量栏渲染 |
-| modal | 974 | 通用弹窗框架 |
-| card editor | 1009 | 新增 / 编辑卡片 |
-| group manager | 1052 | 卡组增删改 |
-| batch group ops | 1105 | 批量加入 / 移出卡组 |
-| import / export | 1130 | JSON / TXT 导入导出、数据合并 |
-| webdav | 1199 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
-| views | 1349 | 视图切换、`closeTopOverlay` 浮层关闭 |
-| events | 1375 | 事件绑定与键盘快捷键 |
-| init | 1510 | 启动引导 |
+| storage | 481 | localStorage 读写、键名常量 |
+| seed / migrate | 497 | 3 张示例卡片、v1 → v2 数据迁移 |
+| data helpers | 544 | `cardsOf` / `groupById` 等查询helper |
+| theme | 568 | 主题与字号应用 |
+| study view | 583 | 背诵视图渲染、翻面、切卡、星标 |
+| group menu | 675 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
+| search sheet | 708 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
+| gestures | 760 | 手势：滑动切卡 / 卡内滚动避让 / 顶部 1/5 下拉搜索；触摸走 touch 事件、鼠标走 pointer（见 HANDOVER §12） |
+| library | 932 | 卡片库列表与批量栏渲染 |
+| modal | 980 | 通用弹窗框架 |
+| card editor | 1015 | 新增 / 编辑卡片 |
+| group manager | 1058 | 卡组增删改 |
+| batch group ops | 1111 | 批量加入 / 移出卡组 |
+| import / export | 1136 | JSON / TXT 导入导出、数据合并 |
+| webdav | 1205 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
+| views | 1355 | 视图切换、`closeTopOverlay` 浮层关闭 |
+| events | 1381 | 事件绑定与键盘快捷键 |
+| init | 1516 | 启动引导 |
 
 ## 开发约定
 
@@ -250,7 +251,13 @@ window.Flashcards // { view(): string, home(): void, back(): boolean }
 
 后两个能力都通过 `davFetch()` 这层薄封装接入：**纯网页环境下 `window.Android` 为 undefined，行为与以前完全一致。**
 
-## 近期更新（v2.4）
+## 近期更新（v2.5）
+
+| 改动 | 之前 | 现在 |
+| --- | --- | --- |
+| 卡片库摘要 | ❌ 背面全文铺开，长卡片把列表撑得很高，卡片一多就难翻 | ✅ **只显示前 4 行**，超出用省略号收尾；列表高度更稳定，全文仍可在「编辑」弹窗里看 |
+
+### v2.4
 
 | 改动 | 之前 | 现在 |
 | --- | --- | --- |
@@ -262,7 +269,7 @@ window.Flashcards // { view(): string, home(): void, back(): boolean }
 星标功能本身**不受影响**：卡片上的星标按钮、卡组菜单里的「星标」入口、菜单底部的「清空星标」都保留，
 键盘 `S` 也照常加星标。
 
-实现细节、踩过的坑与验收清单见 [HANDOVER §12](HANDOVER.md)。
+实现细节、踩过的坑与验收清单见 [HANDOVER §12](HANDOVER.md)、[§14](HANDOVER.md)。
 
 ## 已知问题
 
