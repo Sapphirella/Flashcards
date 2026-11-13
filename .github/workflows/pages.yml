@@ -1,0 +1,45 @@
+name: Deploy to GitHub Pages
+
+# 每次 main 更新后，把 index.html 同步到 gh-pages 分支。
+# GitHub Pages 的来源设置为「Deploy from a branch: gh-pages / (root)」。
+#
+# 为什么只同步 index.html：
+#   网页版是单文件应用，不需要 android/、docs/ 与构建脚本；
+#   只发布这一份页面，Pages 产物最小，也不会把源码目录结构暴露成站点路径。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build static site
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+
+      - name: Publish to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd _site
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html .nojekyll
+          git commit -m "deploy: sync index.html from ${GITHUB_SHA::7}"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

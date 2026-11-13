@@ -31,6 +31,8 @@ Flashcards/
 ├── README.md           # 项目说明：功能、数据格式、快速开始
 ├── HANDOVER.md         # 本文件
 ├── .gitignore
+├── .github/
+│   └── workflows/pages.yml   # main → gh-pages 自动同步，发布 GitHub Pages
 ├── docs/images/        # README 配图
 ├── tools/              # 开发用小工具：WebDAV 测试服务器 + 验证页
 └── android/            # Android 宿主工程（WebView 外壳），见 §6.2
@@ -466,6 +468,26 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图、`Flashcards.back()` 关闭最上层浮层（弹窗 → 搜索面板 → 卡组菜单），没有浮层可关时返回 `false`。
 
 `closeTopOverlay()` 在 `index.html:1374`。
+
+### 6.4 GitHub Pages（在线版）
+
+在线地址：<https://sapphirella.github.io/Flashcards/>
+
+| 项 | 配置 |
+| --- | --- |
+| 发布源 | `gh-pages` 分支根目录（Deploy from a branch） |
+| 站点内容 | 只有 `index.html` + `.nojekyll`，不包含 `android/`、`docs/`、`dist/` |
+| 自动更新 | `.github/workflows/pages.yml`：每次 push `main` 后，把 `index.html` 同步并 force-push 到 `gh-pages` |
+| 页面来源 | 与网页版、APK 版共用根目录同一份 `index.html` |
+
+**要点**：
+
+- 改完 `index.html` 只需要推 `main`，Actions 会自动更新 `gh-pages`；**不要手动改 `gh-pages`**，
+  它下一次会被覆盖（分支历史也被压成单个部署提交）。
+- `.nojekyll` 是必须的：关掉 Jekyll，避免下划线开头的文件/目录被过滤。
+- 网页版仍然从 Google Fonts CDN 取字体；CDN 不通时按 CSS 字体栈回退到系统字体，功能不受影响。
+- Actions 使用 `GITHUB_TOKEN` 推分支，需要工作流里的 `permissions: contents: write`。
+  如果 Pages 没更新，先看 Actions 里 `Deploy to GitHub Pages` 这次运行是否成功。
 
 ---
 

@@ -4,6 +4,8 @@
 
 源码仓库：[github.com/Sapphirella/Flashcards](https://github.com/Sapphirella/Flashcards)（`main` 分支）
 
+在线使用：[sapphirella.github.io/Flashcards](https://sapphirella.github.io/Flashcards/)
+
 数据全部存在浏览器本地（localStorage），可选通过 WebDAV 在多设备间同步。
 
 <img src="docs/images/study.jpg" width="260" alt="背诵视图" />
@@ -37,6 +39,10 @@
 
 ## 快速开始
 
+### 在线使用
+
+已部署到 GitHub Pages：<https://sapphirella.github.io/Flashcards/>。手机或电脑直接打开即可，也可以「添加到主屏幕」当作 PWA 使用。
+
 ### 直接打开
 
 ```bash
@@ -57,7 +63,7 @@ python3 -m http.server 8777
 
 ### 装到手机 / 桌面
 
-这是一个纯静态页面，把它放到任意静态托管（GitHub Pages、Vercel、Netlify，或自己的 Nginx）即可手机访问。也可以用「添加到主屏幕」当作 PWA 使用 —— 已配置 `viewport-fit=cover` 与 `env(safe-area-inset-*)` 安全区适配。
+这是一个纯静态页面。当前已部署到 GitHub Pages（见上方「在线使用」）；也可以自己放到 Vercel、Netlify 或 Nginx 等任意静态托管。也可以用「添加到主屏幕」当作 PWA 使用 —— 已配置 `viewport-fit=cover` 与 `env(safe-area-inset-*)` 安全区适配。
 
 ### 打包成 Android APK
 
@@ -195,10 +201,14 @@ Flashcards/
 ├── README.md       # 本文件
 ├── HANDOVER.md     # 项目接手文档：架构、数据流、扩展指引、遗留问题
 ├── .gitignore      # 忽略 .DS_Store 等
+├── .github/
+│   └── workflows/pages.yml   # 把 index.html 自动同步到 gh-pages，发布 GitHub Pages
 ├── docs/images/    # README 配图
 ├── tools/          # 开发用的小工具（WebDAV 测试服务器与验证页）
 └── android/        # Android 宿主工程：WebView 外壳 + 打包脚本
 ```
+
+在线版通过 GitHub Pages 发布：`main` 每次更新后，Actions 会把 `index.html` 同步到 `gh-pages` 分支，Pages 再从该分支根目录构建。站点地址见上方「在线使用」。
 
 整个应用就是 `index.html` 一个文件，内部按注释分块：
 
