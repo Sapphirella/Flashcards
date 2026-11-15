@@ -134,8 +134,23 @@ svg{display:block}
 .bar{height:3px;border-radius:2px;background:var(--line-soft);overflow:hidden}
 .bar i{display:block;height:100%;background:var(--green);border-radius:2px;transition:width .3s}
 .footbar__row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:7px}
+/* 顺序工具条：状态在左，两个按钮在右；放在进度条下方，拇指容易够到 */
+.orderbar{display:flex;align-items:center;gap:6px;margin-top:9px}
+.orderbar__state{
+  flex:1;min-width:0;font-size:11.5px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.orderbar__state.is-custom{color:var(--green-deep);font-weight:500}
+.orderbtn{
+  display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;
+  border-radius:999px;background:var(--surface);border:1px solid var(--line);
+  color:var(--ink-2);font-size:12px;flex:none;touch-action:manipulation;
+}
+.orderbtn:active{background:var(--surface-2)}
+.orderbtn:disabled{opacity:.42;cursor:default}
+.orderbtn svg{width:12px;height:12px}
 .hint{
-  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 76px);transform:translateX(-50%);
+  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 118px);transform:translateX(-50%);
   font-size:11.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);
   padding:7px 14px;border-radius:999px;width:max-content;max-width:calc(100vw - 32px);text-align:center;line-height:1.5;z-index:40;
   opacity:0;pointer-events:none;transition:opacity .5s;
@@ -288,7 +303,7 @@ svg{display:block}
 .rowfield .input{background:var(--bg)}
 
 .toast{
-  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 28px);transform:translate(-50%,10px);
+  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translate(-50%,10px);
   background:var(--ink);color:var(--bg);font-size:13px;padding:9px 16px;border-radius:999px;
   opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;z-index:90;max-width:82vw;text-align:center;
 }
@@ -336,6 +351,17 @@ svg{display:block}
     <div class="footbar">
       <div class="bar"><i id="progBar" style="width:0%"></i></div>
       <div class="footbar__row"><span id="footLeft"></span><span id="footRight"></span></div>
+      <div class="orderbar">
+        <span class="orderbar__state" id="orderState">默认顺序</span>
+        <button class="orderbtn" id="btnShuffle" aria-label="随机打乱卡片顺序">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h4l10 10h4"/><path d="M18 14l3 3-3 3"/><path d="M3 17h4l3-3"/><path d="M18 4l3 3-3 3"/></svg>
+          <span>随机打乱</span>
+        </button>
+        <button class="orderbtn" id="btnResetOrder" aria-label="恢复默认顺序" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          <span>复位</span>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -434,7 +460,7 @@ svg{display:block}
       <div class="group">
         <div class="group__t">关于</div>
         <div class="rows">
-          <div class="row"><span class="row__l">版本</span><span class="row__v">2.5</span></div>
+          <div class="row"><span class="row__l">版本</span><span class="row__v">2.6</span></div>
           <div class="row"><span class="row__l">卡片</span><span class="row__v" id="statCards">0</span></div>
           <div class="row"><span class="row__l">卡组</span><span class="row__v" id="statGroups">0</span></div>
         </div>
@@ -508,14 +534,16 @@ function seed(){
     mk('abandon','v. 放弃；抛弃；遗弃',false,['单词']),
     mk('a² + b² = c²','勾股定理',false,['数理公式'])
   ];
-  return {version:2,cards:cards,groups:Object.values(gs),settings:{theme:'light',fs:'std',group:'all',webdav:{url:'',user:'',pass:'',dir:'flashcards'}}};
+  return {version:2,cards:cards,groups:Object.values(gs),settings:{theme:'light',fs:'std',group:'all',orders:{},webdav:{url:'',user:'',pass:'',dir:'flashcards'}}};
 }
 /* 清空内容：只删卡片与卡组，保留外观（主题/字号）与 WebDAV 配置——
-   这些是偏好而不是内容，清空卡片时一并重置只会让用户莫名其妙。 */
+   这些是偏好而不是内容，清空卡片时一并重置只会让用户莫名其妙。
+   卡片都清掉了，按卡组保存的随机顺序也一并清空。 */
 function emptyContent(){
   store.cards=[];
   store.groups=[];
   store.settings.group='all';
+  store.settings.orders={};
 }
 function migrateV1(v1){
   const cards=[],groups=[];
@@ -549,6 +577,34 @@ function cardsOf(gid){
   if(gid==='star') return store.cards.filter(c=>c.starred);
   if(gid==='all') return store.cards.slice();
   return store.cards.filter(c=>c.groups.indexOf(gid)>=0);
+}
+/* 背诵顺序按「卡组 id / all / star」分别存在 settings.orders。
+   这里只做一次重排：先按保存的顺序取，新加入的卡（不在旧 order 里）按默认顺序追加到末尾。
+   这样增删卡片后旧顺序不会错乱，也不需要每次写回。 */
+function savedOrder(gid){
+  const o=store.settings&&store.settings.orders;
+  const ids=o&&o[gid];
+  return Array.isArray(ids)&&ids.length?ids:null;
+}
+function orderedCards(gid){
+  const base=cardsOf(gid);
+  const ids=savedOrder(gid);
+  if(!ids) return base;
+  const byId=new Map(base.map(c=>[c.id,c]));
+  const out=[],seen=new Set();
+  ids.forEach(id=>{
+    const c=byId.get(id);
+    if(c&&!seen.has(id)){seen.add(id);out.push(c);}
+  });
+  /* 新增卡片 / 后来才加入该卡组的卡片：排在末尾，而不是从列表里消失 */
+  base.forEach(c=>{if(!seen.has(c.id))out.push(c);});
+  return out;
+}
+function hasCustomOrder(gid){return !!savedOrder(gid)}
+function orderStore(){
+  const s=store.settings;
+  if(!s.orders||typeof s.orders!=='object'||Array.isArray(s.orders)) s.orders={};
+  return s.orders;
 }
 function groupCount(gid){return cardsOf(gid).length}
 function starCards(){return store.cards.filter(c=>c.starred)}
@@ -584,7 +640,7 @@ function applyTheme(){
 const cardEl=el('card'), innerEl=el('cardInner');
 
 function renderStudy(){
-  const cards=cardsOf(ui.group);
+  const cards=orderedCards(ui.group);
   if(ui.index>=cards.length) ui.index=Math.max(0,cards.length-1);
   if(ui.index<0) ui.index=0;
   const c=cards[ui.index];
@@ -616,6 +672,47 @@ function renderStudy(){
   el('progBar').style.width=cards.length?((ui.index+1)/cards.length*100)+'%':'0%';
   el('footLeft').textContent=cards.length?`${ui.index+1} / ${cards.length}`:'0 / 0';
   el('footRight').textContent=`星标 ${starCards().length}`;
+  renderOrderUI(cards);
+}
+
+/* 首页顺序工具条的状态：每个卡组独立判断有没有保存过自定义顺序 */
+function renderOrderUI(cards){
+  const custom=hasCustomOrder(ui.group);
+  const state=el('orderState');
+  state.textContent=cards.length?(custom?'已打乱':'默认顺序'):'暂无卡片';
+  state.classList.toggle('is-custom',custom);
+  el('btnShuffle').disabled=cards.length<2;
+  el('btnResetOrder').disabled=!custom;
+}
+function shuffleStudy(){
+  const cards=orderedCards(ui.group);
+  if(cards.length<2){toast('至少需要两张卡片');return;}
+  const before=cards.map(c=>c.id);
+  const ids=before.slice();
+  for(let i=ids.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    const t=ids[i];ids[i]=ids[j];ids[j]=t;
+  }
+  /* 洗出来恰好和原来一样时（2 张卡有 50% 概率）强制换一位，保证点了有变化 */
+  if(ids.every((id,i)=>id===before[i])) ids.push(ids.shift());
+  orderStore()[ui.group]=ids;
+  save();
+  ui.index=0;ui.flipped=false;cardEl.classList.remove('is-flipped');
+  renderStudy();
+  toast('已随机打乱 · '+currentLabel());
+}
+function resetStudyOrder(){
+  if(!hasCustomOrder(ui.group)){toast('当前已是默认顺序');return;}
+  /* 复位后尽量停在当前这张卡上，只是它回到默认顺序里的位置 */
+  const cur=orderedCards(ui.group)[ui.index];
+  delete orderStore()[ui.group];
+  save();
+  const base=cardsOf(ui.group);
+  const at=cur?base.findIndex(x=>x.id===cur.id):-1;
+  ui.index=at>=0?at:0;
+  ui.flipped=false;cardEl.classList.remove('is-flipped');
+  renderStudy();
+  toast('已恢复默认顺序');
 }
 
 function flip(){
@@ -624,7 +721,7 @@ function flip(){
 }
 /* 滑出与换卡：单一连续动作，不回弹、不二次动画 */
 function goCard(dir,animate){
-  const cards=cardsOf(ui.group);
+  const cards=orderedCards(ui.group);
   if(!cards.length) return;
   const next=ui.index+dir;
   if(next<0||next>=cards.length){
@@ -657,7 +754,7 @@ function toggleStar(id,force){
   if(ui.view==='library')renderLib();
 }
 function starCurrent(){
-  const cards=cardsOf(ui.group);const c=cards[ui.index];if(!c) return;
+  const cards=orderedCards(ui.group);const c=cards[ui.index];if(!c) return;
   if(c.starred){toast('已在星标');return;}
   cardEl.classList.add('is-fly-up');
   setTimeout(()=>{toggleStar(c.id,true);},300);
@@ -751,7 +848,7 @@ function closeSearch(){
 function jumpToCard(id){
   const c=findCard(id); if(!c) return;
   ui.group='all'; store.settings.group='all';
-  ui.index=Math.max(0,cardsOf('all').findIndex(x=>x.id===id));
+  ui.index=Math.max(0,orderedCards('all').findIndex(x=>x.id===id));
   ui.flipped=false; cardEl.classList.remove('is-flipped');
   save(); closeSearch(); show('study'); renderStudy();
   toast('已跳转到该卡片');
@@ -1099,6 +1196,7 @@ function delGroup(id){
     {text:'取消'},
     {text:'删除',cls:'btn--danger',fn:()=>{
       store.groups=store.groups.filter(x=>x.id!==id);
+      if(store.settings.orders) delete store.settings.orders[id];
       store.cards.forEach(c=>{c.groups=c.groups.filter(x=>x!==id);touchCard(c);});
       if(ui.group===id){ui.group='all';ui.index=0;store.settings.group='all';}
       if(ui.libGroup===id) ui.libGroup='all';
@@ -1188,6 +1286,10 @@ function importJson(file){
     openModal('导入',`<p style="font-size:13.5px;color:var(--ink-2)">${v2.cards.length} 张卡片 · ${v2.groups.length} 个卡组</p>`,[
       {text:'覆盖',cls:'btn--danger',fn:()=>{
         store.cards=v2.cards;store.groups=v2.groups;
+        /* 覆盖导入时只恢复备份里的顺序；没有就退回默认顺序。
+           主题、字号、WebDAV 等外观/设备设置仍然保留当前设备的。 */
+        const o=v2.settings&&v2.settings.orders;
+        store.settings.orders=(o&&typeof o==='object'&&!Array.isArray(o))?o:{};
         save();renderLib();renderStudy();toast('已覆盖导入');
       }},
       {text:'合并',cls:'btn--primary',fn:()=>{
@@ -1380,6 +1482,8 @@ function closeTopOverlay(){
 
 /* ================= events ================= */
 el('deckChip').onclick=e=>{e.stopPropagation();openDeckMenu()};
+el('btnShuffle').onclick=shuffleStudy;
+el('btnResetOrder').onclick=resetStudyOrder;
 el('btnLibrary').onclick=()=>{ui.libGroup=ui.group==='star'?'all':ui.group;ui.batch=false;ui.sel.clear();show('library')};
 el('btnSettings').onclick=()=>show('settings');
 el('libBack').onclick=()=>show('study');

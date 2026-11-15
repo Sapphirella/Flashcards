@@ -20,8 +20,9 @@
 - **长内容卡片：正反面文字超出卡片时，卡内上下滑动就能看全**（短内容仍然垂直居中）
 - 从**屏幕顶部 1/5** 处下拉，拉出搜索面板，按关键词搜卡片正反面，命中处高亮，点结果直接跳到那张卡
 - 点卡片上的星标按钮可随时加/取消星标（**上滑不再加星标**）
+- 首页底部可**随机打乱**当前卡组，或**复位**回默认顺序；每个卡组分别保存自己的顺序（全部卡片、星标也各存一份）
 - 键盘：`空格`/`Enter` 翻面 · `←`/`→` 切卡 · `S` 星标 · `D` 搜索
-- 底部进度条显示当前进度与星标总数
+- 底部进度条显示当前进度、星标总数与当前顺序状态
 
 **卡片库**
 - 按卡组筛选卡片，卡组名横向滑动
@@ -139,11 +140,17 @@ adb install -r app/build/outputs/apk/release/app-release.apk
     "theme": "light",             // light | dark | auto
     "fs": "std",                  // std | lg | xl
     "group": "all",               // 上次背诵的卡组
+    "orders": {                   // 每个卡组各自保存的背诵顺序；键为卡组 id / all / star
+      "g1": ["a8c186c...", "..."],
+      "all": ["...", "..."]
+    },
     "lastSync": 1730000000000,    // 上次 WebDAV 同步时间
     "webdav": { "url": "", "user": "", "pass": "", "dir": "flashcards" }
   }
 }
 ```
+
+`settings.orders` 只影响背诵顺序，不影响卡片库列表。新加入卡组的卡片会排在自定义顺序末尾；点「复位」会删掉当前卡组的顺序项。顺序和主题、字号一样是**本地设备偏好**，不参与 WebDAV 同步，但会随「导出 JSON」一起备份，覆盖导入时会恢复。
 
 ⚠️ 数据只存在浏览器里。**清理浏览器数据、换浏览器、换设备都会丢失**，请用「导出 JSON」定期备份。
 
@@ -197,7 +204,7 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ```
 Flashcards/
-├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1536 行）
+├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1640 行）
 ├── README.md       # 本文件
 ├── HANDOVER.md     # 项目接手文档：架构、数据流、扩展指引、遗留问题
 ├── .gitignore      # 忽略 .DS_Store 等
@@ -214,24 +221,24 @@ Flashcards/
 
 | 分块 | 行号 | 内容 |
 | --- | --- | --- |
-| storage | 481 | localStorage 读写、键名常量 |
-| seed / migrate | 497 | 3 张示例卡片、v1 → v2 数据迁移 |
-| data helpers | 544 | `cardsOf` / `groupById` 等查询helper |
-| theme | 568 | 主题与字号应用 |
-| study view | 583 | 背诵视图渲染、翻面、切卡、星标 |
-| group menu | 675 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
-| search sheet | 708 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
-| gestures | 760 | 手势：滑动切卡 / 卡内滚动避让 / 顶部 1/5 下拉搜索；触摸走 touch 事件、鼠标走 pointer（见 HANDOVER §12） |
-| library | 932 | 卡片库列表与批量栏渲染 |
-| modal | 980 | 通用弹窗框架 |
-| card editor | 1015 | 新增 / 编辑卡片 |
-| group manager | 1058 | 卡组增删改 |
-| batch group ops | 1111 | 批量加入 / 移出卡组 |
-| import / export | 1136 | JSON / TXT 导入导出、数据合并 |
-| webdav | 1205 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
-| views | 1355 | 视图切换、`closeTopOverlay` 浮层关闭 |
-| events | 1381 | 事件绑定与键盘快捷键 |
-| init | 1516 | 启动引导 |
+| storage | 507 | localStorage 读写、键名常量 |
+| seed / migrate | 523 | 3 张示例卡片、v1 → v2 数据迁移 |
+| data helpers | 572 | `cardsOf` / `orderedCards` / `groupById` 等查询 helper |
+| theme | 624 | 主题与字号应用 |
+| study view | 639 | 背诵视图渲染、翻面、切卡、星标、随机打乱 / 复位 |
+| group menu | 772 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
+| search sheet | 805 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
+| gestures | 857 | 手势：滑动切卡 / 卡内滚动避让 / 顶部 1/5 下拉搜索；触摸走 touch 事件、鼠标走 pointer（见 HANDOVER §12） |
+| library | 1029 | 卡片库列表与批量栏渲染 |
+| modal | 1077 | 通用弹窗框架 |
+| card editor | 1112 | 新增 / 编辑卡片 |
+| group manager | 1155 | 卡组增删改 |
+| batch group ops | 1209 | 批量加入 / 移出卡组 |
+| import / export | 1234 | JSON / TXT 导入导出、数据合并 |
+| webdav | 1307 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
+| views | 1457 | 视图切换、`closeTopOverlay` 浮层关闭 |
+| events | 1483 | 事件绑定与键盘快捷键 |
+| init | 1620 | 启动引导 |
 
 ## 开发约定
 
@@ -263,7 +270,13 @@ window.Flashcards // { view(): string, home(): void, back(): boolean }
 
 后两个能力都通过 `davFetch()` 这层薄封装接入：**纯网页环境下 `window.Android` 为 undefined，行为与以前完全一致。**
 
-## 近期更新（v2.5）
+## 近期更新（v2.6）
+
+| 改动 | 之前 | 现在 |
+| --- | --- | --- |
+| 首页顺序 | ❌ 只能按创建顺序背，卡组一长就只能从头翻 | ✅ 首页新增**随机打乱**与**复位**；顺序按卡组分别保存，切换卡组再回来也不会丢 |
+
+### v2.5
 
 | 改动 | 之前 | 现在 |
 | --- | --- | --- |
@@ -281,11 +294,12 @@ window.Flashcards // { view(): string, home(): void, back(): boolean }
 星标功能本身**不受影响**：卡片上的星标按钮、卡组菜单里的「星标」入口、菜单底部的「清空星标」都保留，
 键盘 `S` 也照常加星标。
 
-实现细节、踩过的坑与验收清单见 [HANDOVER §12](HANDOVER.md)、[§14](HANDOVER.md)。
+实现细节、踩过的坑与验收清单见 [HANDOVER §12](HANDOVER.md)、[§14](HANDOVER.md)、[§15](HANDOVER.md)。
 
 ## 已知问题
 
 - 批量操作栏在极窄屏（< 340px）下按钮文字会被省略号截断，功能不受影响。
+- 随机顺序只存在本地 `settings.orders`，不参与 WebDAV 同步；换设备后背诵顺序会回到默认（卡片本身仍会同步）。
 - WebDAV 密码明文存储于 localStorage。
 - 无自动化测试，回归验证依赖手动走查。
 - 长内容滚动与新手势只在无头 Chrome 里做过自动化验收，iOS / Android 真机手感仍建议装机复检。
