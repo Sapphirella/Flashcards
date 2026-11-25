@@ -15,7 +15,7 @@
 | 决策 | 原因 |
 | --- | --- |
 | 单文件 | 整个应用就是一个网页，拷走 `index.html` 到任何地方都能用 —— 手机、U 盘、静态托管、离线打开 |
-| 不用框架 | 这个体量（~1640 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
+| 不用框架 | 这个体量（~1867 行）用框架反而是负担；原生 DOM 操作在这个规模下完全够用 |
 | localStorage 存数据 | 零后端成本，且离线可用；用 WebDAV 解决多设备同步 |
 | 无构建 | 想改就改，保存刷新即生效，没有 `npm install` 门槛 |
 
@@ -27,7 +27,7 @@
 
 ```
 Flashcards/
-├── index.html          # 全部代码（HTML + CSS + JS，1640 行）
+├── index.html          # 全部代码（HTML + CSS + JS，1867 行）
 ├── README.md           # 项目说明：功能、数据格式、快速开始
 ├── HANDOVER.md         # 本文件
 ├── .gitignore
@@ -68,10 +68,10 @@ Flashcards/
 
 ### 3.2 状态
 
-只有两个全局状态对象（`index.html:507` 起）：
+只有两个全局状态对象（`index.html:539` 起）：
 
 ```js
-let store = null;   // 业务数据：{version, cards[], groups[], settings{}}
+let store = null;   // 业务数据：{version, cards[], groups[], deleted{}, settings{}}
 let ui = {
   view: 'study',    // 当前视图
   group: 'all',     // 背诵的卡组（'all' | 'star' | groupId）
@@ -86,6 +86,7 @@ let ui = {
 - `store` 是**持久化数据**，任何修改后必须 `save()` 写进 localStorage。
 - `ui` 是**瞬时界面状态**，不落盘（`ui.group` 除外，它会同步到 `store.settings.group`）。
 - `store.settings.orders` 保存**每个卡组各自的自定义背诵顺序**（键为卡组 id / `all` / `star`），见 §15。
+- `store.deleted` 保存**删除墓碑**（`cards` / `groups` 两张 id→删除时间表），见 §17。
 - `ui.sel` 用 `Set` 存选中项，切换到非批量模式时必须 `ui.sel.clear()`。
 
 ### 3.3 数据流
@@ -100,9 +101,9 @@ let ui = {
 
 | 函数 | 位置 | 负责 |
 | --- | --- | --- |
-| `renderStudy()` | `index.html:642` | 背诵视图：卡片正反面、进度条、底部计数 |
-| `renderLib()` | `index.html:1030` | 卡片库：卡组 chips、卡片列表、批量栏 |
-| `renderSearch()` | `index.html:821` | 下拉搜索面板的结果列表 |
+| `renderStudy()` | `index.html:820` | 背诵视图：卡片正反面、进度条、底部计数 |
+| `renderLib()` | `index.html:1208` | 卡片库：卡组 chips、卡片列表、批量栏 |
+| `renderSearch()` | `index.html:999` | 下拉搜索面板的结果列表 |
 
 **注意**：这些函数是**整块 `innerHTML` 替换**，不是局部更新。改完数据只要调用对应 `render*()` 即可，不需要手动刷新 DOM。
 
@@ -129,11 +130,11 @@ const OLD_KEY  = 'flashcards.v1';   // 旧版本（仅迁移用）
 const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 ```
 
-- `load()`（`index.html:557`）：依次尝试读 v2 → 读 v1 并迁移 → 都没有就 `seed()` 写示例数据。
-- `save(data)`（`index.html:568`）：`localStorage.setItem(KEY, JSON.stringify(data || store))`，**包了 try/catch**，写入失败（隐私模式、配额满）时静默忽略。
-- `migrateV1()`（`index.html:548`）：把 v1 的 `decks[]` 结构转成 v2 的 `groups[] + cards[].groups[]`。
-- `seed()`（`index.html:527`）：只在**从未存过数据**时跑一次，写 3 张示例卡片 + 3 个示例卡组。
-- `emptyContent()`（`index.html:542`）：清空卡片与卡组，保留外观与 WebDAV 设置。「设置 → 清空全部数据」调的是它。
+- `load()`（`index.html:689`）：依次尝试读 v2 → 读 v1 并迁移 → 都没有就 `seed()` 写示例数据。
+- `save(data)`（`index.html:700`）：`localStorage.setItem(KEY, JSON.stringify(data || store))`，**包了 try/catch**，写入失败（隐私模式、配额满）时静默忽略。
+- `migrateV1()`（`index.html:680`）：把 v1 的 `decks[]` 结构转成 v2 的 `groups[] + cards[].groups[]`。
+- `seed()`（`index.html:656`）：只在**从未存过数据**时跑一次，写 3 张示例卡片 + 3 个示例卡组。
+- `emptyContent()`（`index.html:671`）：清空卡片与卡组，保留外观与 WebDAV 设置。「设置 → 清空全部数据」调的是它。
 
 > ⚠️ **清空数据要写回一个「空 store」，而不是 `localStorage.removeItem(KEY)`。**
 > `load()` 只在 KEY **不存在**时才会跑 `seed()`；如果只是删掉 KEY 而不写回空数据，
@@ -145,34 +146,35 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 
 ## 4. 模块地图（带行号）
 
-> 行号对应当前 `index.html`（1640 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
+> 行号对应当前 `index.html`（1867 行）。改动后行号会漂移，用注释标记 `/* ================= xxx ================= */` 搜索更可靠。
 
 | 分块 | 行 | 要点 |
 | --- | --- | --- |
 | CSS 变量 / 主题 | 12–38 | `:root` 定义配色，`[data-theme="dark"]` 覆盖，`[data-fs="lg\|xl"]` 覆盖字号 |
 | 布局骨架 | 53–55 | `#app` / `.view` |
-| 背诵视图样式 | 75–159 | 卡片 3D 翻面、滑动、**卡内滚动**（`.face__body`）、飞入飞出关键帧 |
-| 浮层样式 | 160–228 | 遮罩、菜单、**搜索面板**、弹窗、按钮 |
-| 卡片库样式 | 229–278 | **批量栏修复重点**，见 §5 |
-| 设置样式 | 279–319 | 分组卡片、开关行、WebDAV 备份位置、坚果云提示、toast / 空状态 |
-| storage | 507 | key 常量、`uid()`、`esc()`、`toast()`、`fmt()` |
-| seed / migrate | 523 | **3 张**示例卡片、3 个示例卡组、v1 迁移、`emptyContent()` |
-| data helpers | 572 | `cardsOf(gid)` 是**最核心的查询函数**；`orderedCards(gid)` 在其上叠加卡组自定义顺序 |
-| theme | 624 | `applyTheme()` 应用主题 + 同步状态栏 |
-| study view | 639 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` / `shuffleStudy` / `resetStudyOrder` |
-| group menu | 772 | 卡组下拉菜单（含「星标」入口与「清空星标」） |
-| search sheet | 805 | 下拉搜索面板：`matchCards` / `markHit` / `renderSearch` / `jumpToCard` |
-| gestures | 857 | `scrollBoxAt` / `gestureStart` / `gestureMove` / `gestureEnd`；触摸走 touch 事件、鼠标走 pointer，阈值常量 `TH`，见 §12 |
-| library | 1029 | `renderLib()` 渲染列表与批量栏 |
-| modal | 1077 | `openModal(title, bodyHTML, buttons, onClose)` 通用弹窗 |
-| card editor | 1112 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器 |
-| group manager | 1155 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
-| batch ops | 1209 | `batchGroups(mode)` 批量加入/移出卡组 |
-| import/export | 1234 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
-| webdav | 1307 | `davFetch` / `davErrText` / `davEnsureDir` / `davTest` / `davSync` |
-| views | 1457 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
-| events | 1483 | 所有事件绑定、键盘快捷键 |
-| init | 1620 | 启动：load → applyTheme → render → 首次提示 |
+| 背诵视图样式 | 75–190 | 卡片 3D 翻面、滑动、**卡内滚动**（`.face__body`）、飞入飞出关键帧 |
+| 浮层样式 | 191–260 | 遮罩、菜单、**搜索面板**、弹窗、按钮 |
+| 卡片库样式 | 261–310 | **批量栏修复重点**，见 §5 |
+| 设置样式 | 311–351 | 分组卡片、开关行、WebDAV 备份位置、坚果云提示、toast / 空状态 |
+| storage | 539 | key 常量、`uid()`、`esc()`、`toast()`、`fmt()` |
+| markdown | 552 | `md()` / `mdInline()` / `mdPlain()`；先转义再生成白名单标签 |
+| seed / migrate | 652 | **3 张**示例卡片、3 个示例卡组、v1 迁移、`emptyContent()` |
+| data helpers | 704 | `cardsOf` / `orderedCards` 是查询入口；`markDeleted` / `mergeDeleted` / `applyDeleted` 负责删除墓碑 |
+| theme | 802 | `applyTheme()` 应用主题 + 同步状态栏 |
+| study view | 817 | `renderStudy` / `flip` / `goCard` / `toggleStar` / `starCurrent` / `shuffleStudy` / `resetStudyOrder`；正反面用 `md()` 渲染 |
+| group menu | 950 | 卡组下拉菜单（含「星标」入口与「清空星标」） |
+| search sheet | 983 | 下拉搜索面板：`matchCards` / `markHit` / `renderSearch` / `jumpToCard` |
+| gestures | 1035 | `scrollBoxAt` / `gestureStart` / `gestureMove` / `gestureEnd`；触摸走 touch 事件、鼠标走 pointer，阈值常量 `TH`，见 §12 |
+| library | 1207 | `renderLib()` 渲染列表与批量栏 |
+| modal | 1255 | `openModal()` 通用弹窗；自动聚焦不抢用户已点中的输入框 |
+| card editor | 1302 | `editCard()` 新增/编辑，`groupPicker()` 卡组选择器；组标签不抢 textarea 焦点 |
+| group manager | 1345 | `manageGroups` / `newGroup` / `renameGroup` / `delGroup` |
+| batch ops | 1400 | `batchGroups(mode)` 批量加入/移出卡组 |
+| import/export | 1425 | `exportJson` / `exportTxt` / `mergeStore` / `importJson` |
+| webdav | 1532 | `davFetch` / `davErrText` / `davEnsureDir` / `davTest` / `davSync` |
+| views | 1682 | `show(view)` 切换视图、`closeTopOverlay()` 关闭最上层浮层 |
+| events | 1708 | 所有事件绑定、键盘快捷键 |
+| init | 1847 | 启动：load → applyTheme → render → 首次提示 |
 
 ### 关键函数速查
 
@@ -183,10 +185,11 @@ const HINT_KEY = 'flashcards.hint.v1'; // 只记「提示是否显示过」
 | `groupCount(gid)` | 卡组内卡片数 | 基于 `cardsOf` |
 | `save()` | 落盘 | **每次改数据后都要调** |
 | `touchCard(c)` / `touchGroup(g)` | 更新 `updatedAt` | WebDAV 合并的决胜依据，**改数据必须调** |
-| `mergeStore(local, remote)` | 按 `updatedAt` 逐条合并 | 导入「合并」与 WebDAV 同步共用 |
+| `mergeStore(local, remote)` | 按 `updatedAt` + 删除墓碑逐条合并 | 导入「合并」与 WebDAV 同步共用，见 §17 |
+| `markDeleted(kind, ids)` | 删除时写墓碑 | `kind` 为 `cards` / `groups`；删卡、删组、清空都要调 |
 | `openModal(...)` | 通用弹窗 | 按钮 `fn` 返回 `false` 可阻止自动关闭 |
 | `esc(s)` | HTML 转义 | **任何用户输入拼进 innerHTML 前必须过一遍** |
-| `hl(s)` | 高亮 `「」` 包裹的内容 | 背面答案里 `「...」` 会渲染成粉色高亮 |
+| `md(s)` / `mdPlain(s)` | 安全 Markdown 渲染 / 去标记纯文本 | 见 §16；HTML 一律转义，链接只允许 http(s)/mailto |
 
 ---
 
@@ -284,6 +287,8 @@ transform:translateY(-101%)   ← 藏在屏幕上方
 - 同步：`GET` 远端 → `mergeStore(local, remote)` → `MKCOL` 逐级建目录 → `PUT` 回远端。
 
 **合并语义**：卡片和卡组**各自独立**比较 `updatedAt`，谁的 `updatedAt` 大用谁。同一张卡在两台设备上同时被改，仍然会丢一方（last-write-wins），这是有意为之的简化。
+
+**删除墓碑**：删除卡片/卡组不会只从数组里移除，还会写 `deleted` 墓碑；合并时墓碑与 `updatedAt` 比较，避免远端旧副本把已删除记录带回来。完整算法见 §17。
 
 #### 6.1.1 ⚠️ 上传必须检查返回码
 
@@ -430,7 +435,7 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 | 正式 | `app/build/outputs/apk/release/app-release.apk` | `build/manual/out/flashcards-release.apk` | `com.amarisgo.flashcards` |
 | 调试 | `app/build/outputs/apk/debug/app-debug.apk` | `build/manual/out/flashcards-debug.apk` | `com.amarisgo.flashcards.debug` |
 
-配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 8 / versionName 2.6。
+配置：AGP 8.11.0 / Gradle 8.14.3 / compileSdk 35 / minSdk 26 / targetSdk 35 / versionCode 9 / versionName 2.7。
 
 - **minSdk 26（Android 8.0）**：这样只需要自适应图标（纯 XML），不必生成 PNG 位图。
 - **targetSdk 35 + 手动应用 systemBars insets 作为 padding**：API 35 强制 edge-to-edge，早期版本系统已内缩窗口、insets 为 0，两者统一处理不会重复留白。
@@ -469,7 +474,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 
 宿主 App 可用 `Flashcards.home()` 跳回首页、`Flashcards.view()` 查询当前视图、`Flashcards.back()` 关闭最上层浮层（弹窗 → 搜索面板 → 卡组菜单），没有浮层可关时返回 `false`。
 
-`closeTopOverlay()` 在 `index.html:1476`。
+`closeTopOverlay()` 在 `index.html:1701`。
 
 ### 6.4 GitHub Pages（在线版）
 
@@ -505,20 +510,20 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 ### 7.2 加一个新视图
 
 1. 加 `<section class="view" id="vYourView">…</section>`，放在 `#app` 内。
-2. 在 `show(view)`（`index.html:1458`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
+2. 在 `show(view)`（`index.html:1683`）里加一行 `el('vYourView').classList.toggle('is-active', view==='yourview')`。
 3. 加 `ui.yourview = ...` 状态。
 4. 记得给 `#app` 里的兄弟 section 留出空间（它们 `display:none`，不占位）。
 
 ### 7.3 加一条数据字段
 
-1. `seed()`（`index.html:527`）里给示例卡片补上新字段。
-2. `editCard()`（`index.html:1124`）里加输入项，保存时写进对象。
-3. `mergeStore()`（`index.html:1261`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
+1. `seed()`（`index.html:656`）里给示例卡片补上新字段。
+2. `editCard()`（`index.html:1314`）里加输入项，保存时写进对象。
+3. `mergeStore()`（`index.html:1452`）里补上新字段的合并逻辑 —— **漏了这步，WebDAV 同步会把新字段抹掉**。
 4. 如果字段会破坏兼容，考虑在 `load()` 里做默认值兜底。
 
 ### 7.4 加一种卡片操作
 
-批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1583`）和 `batchGroups()`（`index.html:1210`）两处。新的批量动作需要在这两处都加分支。
+批量操作在 `batchBar` 的 `data-b` 分发（`index.html:1808`）和 `batchGroups()`（`index.html:1401`）两处。新的批量动作需要在这两处都加分支。
 
 ---
 
@@ -531,7 +536,7 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 | 3 | 批量栏在 < 340px 极窄屏下文字截断 | 显示为「加入卡…」 | 已用 `text-overflow:ellipsis` 兜底，功能正常 |
 | 4 | 同一张卡并发修改会丢一方 | WebDAV 同步边缘情况 | last-write-wins 的固有代价 |
 | 5 | 卡片库列表滚动位置在视图切换后保留 | 可能不符合预期 | 与原实现一致，暂未改 |
-| 6 | `index.html` 单文件已达 1640 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
+| 6 | `index.html` 单文件已达 1867 行 | 再加功能会继续膨胀 | 目前可接受；若超过 ~2000 行，建议至少拆出 CSS 与 JS（仍保持零构建，手写 `<link>`/`<script src>`） |
 | 7 | 示例数据在首次打开时自动写入 | 打开即有 3 张示例卡片 | 设计如此（3 张够看清形态又不淹没内容），「设置 → 清空全部数据」可一键清掉 |
 | 8 | 搜索面板不搜卡组名 | 只搜卡片正反面，搜不到「古诗文」这类卡组名 | 有意为之：卡组本来就能在菜单里直接选。要加的话改 `matchCards()` 一处即可 |
 | 9 | 搜索跳转统一落到「全部卡片」上下文 | 从某个卡组里搜到别的卡组的卡，跳过去后卡组变成了「全部卡片」 | 有意为之：搜索是跨卡组的，沿用当前卡组上下文会导致「看到的卡」和「搜到的卡」对不上 |
@@ -546,6 +551,9 @@ window.Flashcards = { view: () => ui.view, home: () => show('study'), back: () =
 | 18 | ~~下拉搜索在任意位置都会触发~~ | 卡片中部下滑容易误触出搜索面板 | **已改（v2.4）** —— 触发区收窄到视口顶部 1/5；可滚动的卡内正文不参与。见 §12.4 |
 | 19 | 触摸手势只在无头 Chrome 里验证过 | iOS / Android 真机手感可能不同 | 滚动、边界、横滑、下拉均已自动化验证；**建议装机复走 §10.0** |
 | 20 | 随机顺序只存在本地 `settings.orders` | 换设备后背诵顺序回到默认；WebDAV 不同步顺序 | 有意为之：与主题、字号一样是设备偏好，卡片本身仍同步。见 §15.2 |
+| 21 | Markdown 只支持子集 | 图片、表格、LaTeX 公式不渲染 | 有意控制复杂度与安全面；HTML 一律转义。见 §16 |
+| 22 | 2.7 之前的客户端不识别删除墓碑 | 旧客户端参与同步仍可能复活已删除数据 | **升级所有设备到 2.7+** 后再同步。见 §17.5 |
+| 23 | 输入卡片时键盘偶发收起未在真机稳定复现 | 无法 100% 确认根因 | 已修两个高概率原因：组标签抢焦点、弹窗自动聚焦抢焦点。见 §18 |
 
 ---
 
@@ -676,6 +684,18 @@ cd android
 - [x] 单卡卡组的打乱按钮置灰，避免点了没有效果
 - [ ] 真机触摸：在底部按钮上点按不会误触翻面 / 切卡（按钮已被手势排除）
 
+### 10.3 v2.7 专项（Markdown / 删除同步 / 输入焦点，已实现）
+
+- [x] Markdown 标题、粗体、斜体、删除线、行内代码、代码块、列表、引用、链接、`「」` 高亮均能渲染
+- [x] HTML 标签被转义为文字；`javascript:` 链接不生成 `<a>`；`md()` 输出不含可执行标签
+- [x] 卡片库用 `mdPlain()` 显示摘要，不出现 `**`、`#`、列表标记
+- [x] 删除卡组 → 同步 → 远端写入 `deleted.groups.<id>`；另一台持旧数据的设备同步后卡组消失
+- [x] 删除卡片 / 清空全部数据同理；旧设备同步后不会复活
+- [x] 删除卡组后，卡片上残留的 group id 在合并时被摘掉
+- [x] 触摸点组标签时，textarea 焦点保持、Markdown 输入内容不丢、chip 仍能选中
+- [x] 打开编辑弹窗后立刻点背面 textarea，60ms 自动聚焦不会抢走焦点
+- [ ] 真机：在键盘弹出时连续点组标签 / 切换输入框，确认键盘不再收起（无头环境只能验焦点）
+
 ---
 
 ## 11. 常见问题速查
@@ -753,8 +773,8 @@ A：v2.4 起触发区收窄到**视口顶部 1/5**：从顶栏下方那条窄带
 | 需求 | v2.4 的行为 | 主要代码位置 |
 | --- | --- | --- |
 | 卡片内容太长看不全 | 卡内正文可上下滑到最后一字，正反面都是；短内容仍垂直居中 | `.face__body`（`index.html:100-107`） |
-| 取消上滑星标 | 卡片上向上划什么都不发生；星标保留按钮 / 键盘 `S` / 菜单入口 | `gestureMove`（`index.html:893`）、`gestureEnd`（`index.html:921`） |
-| 下拉搜索限定顶部 1/5 | 只有起点在视口顶部 20% 内、且向下拉才唤出搜索 | `gestureStart`（`index.html:879`）、`gestureMove`（`index.html:893`） |
+| 取消上滑星标 | 卡片上向上划什么都不发生；星标保留按钮 / 键盘 `S` / 菜单入口 | `gestureMove`（`index.html:1071`）、`gestureEnd`（`index.html:1099`） |
+| 下拉搜索限定顶部 1/5 | 只有起点在视口顶部 20% 内、且向下拉才唤出搜索 | `gestureStart`（`index.html:1057`）、`gestureMove`（`index.html:1071`） |
 
 ### 12.2 卡内滚动（改动一）
 
@@ -775,7 +795,7 @@ A：v2.4 起触发区收窄到**视口顶部 1/5**：从顶栏下方那条窄带
 **3D 翻转不影响滚动**：`.face` 自己带 `overflow:hidden`，已经把它变成 2D 上下文；
 `rotateY(180deg)` 的背面照样能滚（已实测）。
 
-**手势避让**（`scrollBoxAt()`，`index.html:873`）：
+**手势避让**（`scrollBoxAt()`，`index.html:1051`）：
 
 ```js
 function scrollBoxAt(target){
@@ -815,9 +835,9 @@ function scrollBoxAt(target){
 
 **保留不动**（星标功能不受影响）：
 
-- `starCurrent()`（`index.html:756`）—— 键盘 `S` 调用，仍带「卡片飞上去」动效
-- `toggleStar()`（`index.html:748`）—— 卡片上的星标按钮
-- 卡组菜单的「星标」入口与「清空星标」（`openDeckMenu()`，`index.html:773`）
+- `starCurrent()`（`index.html:934`）—— 键盘 `S` 调用，仍带「卡片飞上去」动效
+- `toggleStar()`（`index.html:926`）—— 卡片上的星标按钮
+- 卡组菜单的「星标」入口与「清空星标」（`openDeckMenu()`，`index.html:951`）
 - `.is-fly-up` 与 `flyUp` 关键帧
 
 **取舍**：手动点星标按钮只有 `pop` 图标动效，没有飞卡动效（原本就没有）。
@@ -867,7 +887,7 @@ g.mode = g.scroll ? null : ((dy>0 && g.fromTop) ? 'search' : null);
 
 > §12 的三项改造已经完成。先按 §10.0 在真机上复检手势手感，再决定下一步。
 
-先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1640 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
+先花 10 分钟把 `index.html` 从头到尾读一遍 —— 只有 1867 行，而且是高度规整的「CSS 在前、JS 按功能分块在后」的结构，读完就完全掌握这个项目了。
 
 读完重点看这几处：
 
@@ -1023,3 +1043,159 @@ python3 -m http.server 8777 &
 - 星标组、单卡组、新增卡片追加、搜索跳转、覆盖导入恢复顺序均通过。
 
 真机只需补一条：底部按钮在触摸下不会触发卡片翻面/切卡（按钮已排除在手势起点之外）。
+
+---
+
+## 16. Markdown 渲染（v2.7 已实现）
+
+### 16.1 范围
+
+- 卡片**正面和背面**在背诵视图用 `md()` 渲染；卡片库用 `mdPlain()` 去掉标记后显示摘要。
+- 编辑器里仍然编辑**原始 Markdown**，不引入富文本编辑器。
+- 支持的语法：标题、粗体/斜体/删除线、行内代码、围栏代码块、有序/无序列表、引用、分隔线、
+  `[文字](链接)`、`「」` 高亮。换行保留为 `<br>`。
+- **不支持**：图片、表格、LaTeX 公式、原始 HTML。理由：单文件零依赖；表格/图片会引入额外的解析与安全面。
+
+### 16.2 安全模型
+
+输入是不可信文本，绝对不能直接 `innerHTML = raw`：
+
+1. `mdInline()` 一开始就调用 `esc()`，把 `& < > " '` 全部转义；
+2. 只生成 `p / h1-h6 / strong / em / del / code / pre / ul / ol / li / blockquote / a / hr / span` 这些白名单标签；
+3. 链接先经过 `safeHref()`，**只允许 `http://`、`https://`、`mailto:`**，其他协议原样显示文字；
+4. 代码、链接、`「」` 高亮先用占位符抽出来，再做 `** / * / _` 替换，避免正则误伤生成的标签和 URL；
+5. 代码块内容单独 `esc()`，不参与行内解析。
+
+验证时专门输入过 `<img src=x onerror=...>`、`[坏链接](javascript:alert(1))`、代码块里的 `<tag>`：
+DOM 里没有 img/script，坏链接没有 `<a>`，代码块显示的是转义后的文本。
+
+### 16.3 块级解析
+
+`md()` 是逐行状态机：
+
+```
+代码围栏 → <pre><code>
+# 标题        → <hN>
+---           → <hr>
+> 引用        → <blockquote>（内部递归 md()）
+- / 1. 列表   → <ul>/<ol>
+空行          → 结束当前段落/列表
+其余连续行    → <p>，行间 <br>
+```
+
+`br` 是刻意保留的：闪卡用户经常一行一个要点，若按标准 Markdown 把单换行折叠成空格，阅读体验会变差。
+
+### 16.4 CSS
+
+Markdown 容器用 `div.front-text.md` / `div.back-text.md`，不能再用 `<p>` 包裹（`<p>` 里放 `<h1>/<ul>`
+会被浏览器自动闭合，导致样式丢失）。`.md` 关闭 `white-space:pre-wrap`，再给标题/列表/引用/代码块单独定样式。
+代码块 `overflow-x:auto`，长行可横向滚动；正面代码块字号单独缩小，避免 34px 基准下撑爆卡片。
+
+---
+
+## 17. 删除墓碑与云同步（v2.7 已实现）
+
+### 17.1 问题
+
+旧版合并是「并集 + updatedAt 决胜」：删除只是把记录从本地数组里移除，远端文件里那条记录仍然存在，
+下一次同步合并时它会被原样加回来 —— 表现为「删掉的卡组又回来了」的僵尸数据。
+
+### 17.2 数据
+
+```json
+{
+  "deleted": {
+    "cards":  { "c_old": 1795607708701 },
+    "groups": { "g_old": 1795607708701 }
+  }
+}
+```
+
+- 删除时间用 `now()`（毫秒），与 `updatedAt` 同一时间基准。
+- 只存 id 与时间，不存内容；数据量很小。
+- 墓碑随 WebDAV 文件上传，随 JSON 导出/覆盖导入恢复。
+
+### 17.3 写入点
+
+| 操作 | 代码 | 墓碑 |
+| --- | --- | --- |
+| 删除单张卡片 | `delCard()` | `deleted.cards[id] = now()` |
+| 批量删除 | `batchBar` 的 `data-b=del` 分支 | 每个选中 id 写一条 |
+| 删除卡组 | `delGroup()` | `deleted.groups[id]`，同时从受影响卡片里摘掉 group id 并 `touchCard` |
+| 清空全部数据 | `emptyContent()` | 当前所有 cards/groups 的 id 全部写墓碑，再清空数组 |
+| 覆盖导入 | `importJson()` 的「覆盖」 | `store.deleted = normalizeDeleted(v2.deleted)` |
+
+### 17.4 合并算法
+
+`mergeStore(local, remote)`：
+
+1. `out = deepCopy(local)`，`out.deleted = normalizeDeleted(local.deleted)`；
+2. 合并两边墓碑，同 id 取更大的时间；
+3. 合并远端卡组：如果 `out.deleted.groups[id] >= rg.updatedAt` → 跳过；
+   如果墓碑更旧（远端记录在删除后又被改过）→ 删墓碑，按 `updatedAt` 正常决胜；
+4. 合并远端卡片：同一套规则；
+5. `applyDeleted()` 再用合并后的墓碑清理本地记录：墓碑赢 → 删记录；记录更新 → 删墓碑；
+6. 卡组删除后，把卡片上残留的 group id 过滤掉，避免幽灵引用；
+7. 返回合并结果，`davSync()` 再把带墓碑的完整 store `PUT` 回远端。
+
+**时间相等时删除胜出**（`>=`），避免边界抖动。
+**远端记录更新时记录胜出**：例如 A 删除后、B 又编辑了这条记录，按 last-write-wins 保留 B 的编辑并删除墓碑。
+这是有意的冲突策略，和原有 `updatedAt` 语义一致。
+
+### 17.5 兼容性
+
+- 2.7 之前的客户端不认识 `deleted`，会忽略墓碑并可能把旧记录重新上传。
+  多设备使用时必须**先把所有设备升级到 2.7+**，再让旧客户端参与同步。
+- 墓碑目前不自动清理。个人卡片量级下每条只有 id+时间，增长可以忽略；若未来要清理，
+  建议只清理超过 1 年、且确定所有设备都同步过的墓碑。
+
+### 17.6 验收
+
+用 `tools/dav-test-server.py --cors` + 无头 Chrome 实测：
+
+1. A 删除「四六级英语」组 → 本地出现 `deleted.groups.g2` → 同步 → 远端 JSON 含同一墓碑，组不在远端数组中；
+2. B 持旧数据（g2 还在）同步 → g2 被墓碑删掉，卡片上 g2 的成员关系被摘除；
+3. B 删除卡片 c1 → 同步 → 远端 `deleted.cards.c1`；C 持旧数据同步 → c1 不复活；
+4. 清空全部数据 → 同步 → 旧设备同步后 cards/groups 仍为空。
+
+---
+
+## 18. 输入卡片时键盘收起（v2.7 修复高概率原因）
+
+### 18.1 现象
+
+用户反馈：编辑卡片内容时，键盘偶尔会自己收回去；只在真机上偶发过一次，无法稳定复现。
+
+### 18.2 找到的两个高概率原因
+
+1. **组标签是 `<button>`，点它会抢走 textarea 的焦点。**
+   在编辑卡片时点「卡组」chip，浏览器会把焦点移到按钮上，移动端键盘随之收起。
+2. **`openModal()` 的 60ms 自动聚焦会抢用户已经点中的输入框。**
+   弹窗打开后用户手快，先点了背面 textarea；60ms 定时器仍会 focus 正面，造成光标跳走/键盘闪动。
+
+### 18.3 修复
+
+- 组标签容器（`modalBody`）监听 `pointerdown` / `mousedown`，命中 `[data-pick]` 时 `preventDefault()`；
+  这样不会转移焦点，但 `click` 仍然正常触发（Chrome 触摸与鼠标路径均已验证）。
+- `openModal()` 的自动聚焦先判断 `modalBody.contains(document.activeElement)`，用户已点中弹窗内输入框时不再抢焦点。
+- 没有使用 `touchstart.preventDefault()`：那会阻止 click，导致组标签点不动。
+
+### 18.4 验收
+
+无头 Chrome + CDP 触摸：
+
+- 打开编辑弹窗后立刻 focus `#edBack`，等 200ms，`document.activeElement` 仍是 `#edBack`；
+- 触摸点组标签，焦点仍在 `#edBack`，textarea 内容不丢，chip 的 `is-picked` 正常切换；
+- 鼠标路径同样验证通过。
+
+**仍未在真机上稳定复现原 bug**；如果用户再次遇到，需要记录「当前焦点在哪个输入框、点了什么、
+键盘收起前是否有弹窗/组标签/滚动」，再按 §18.2 的两个方向继续排查。
+
+---
+
+## 19. 版本 2.7 的改动清单
+
+- Markdown 渲染（§16）
+- 删除墓碑与云同步（§17）
+- 输入焦点修复（§18）
+- 版本号 2.7 / versionCode 9

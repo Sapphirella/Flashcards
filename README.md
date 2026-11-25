@@ -21,6 +21,7 @@
 - 从**屏幕顶部 1/5** 处下拉，拉出搜索面板，按关键词搜卡片正反面，命中处高亮，点结果直接跳到那张卡
 - 点卡片上的星标按钮可随时加/取消星标（**上滑不再加星标**）
 - 首页底部可**随机打乱**当前卡组，或**复位**回默认顺序；每个卡组分别保存自己的顺序（全部卡片、星标也各存一份）
+- 卡片正反面支持 **Markdown**：标题、粗体/斜体、列表、引用、代码块、链接；卡片库显示纯文本摘要
 - 键盘：`空格`/`Enter` 翻面 · `←`/`→` 切卡 · `S` 星标 · `D` 搜索
 - 底部进度条显示当前进度、星标总数与当前顺序状态
 
@@ -34,7 +35,7 @@
 **设置**
 - 主题：浅色 / 深色 / 跟随系统
 - 字号：标准 / 大 / 特大
-- WebDAV 同步：测试连接、一键同步（双向合并，按 `updatedAt` 决胜）
+- WebDAV 同步：测试连接、一键同步（双向合并，按 `updatedAt` 决胜；删除也会同步）
 - 数据导入导出、清空全部数据（连示例卡片一起清掉）
 - 卡片与卡组数量统计
 
@@ -136,6 +137,10 @@ adb install -r app/build/outputs/apk/release/app-release.apk
   "groups": [
     { "id": "g1", "name": "古诗文", "updatedAt": 1730000000000 }
   ],
+  "deleted": {                    // 删除墓碑：id -> 删除时间（毫秒）
+    "cards":  { "oldCardId": 1730000000000 },
+    "groups": { "oldGroupId": 1730000000000 }
+  },
   "settings": {
     "theme": "light",             // light | dark | auto
     "fs": "std",                  // std | lg | xl
@@ -152,7 +157,26 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 `settings.orders` 只影响背诵顺序，不影响卡片库列表。新加入卡组的卡片会排在自定义顺序末尾；点「复位」会删掉当前卡组的顺序项。顺序和主题、字号一样是**本地设备偏好**，不参与 WebDAV 同步，但会随「导出 JSON」一起备份，覆盖导入时会恢复。
 
+`deleted` 是删除墓碑。删除卡片/卡组、清空全部数据时不会只从数组里移除，而是同时记下 id 与删除时间；同步合并时用删除时间与记录的 `updatedAt` 做 last-write-wins，远端旧副本不会把已删除的数据带回来。墓碑会随导出 JSON 备份，目前不做自动清理。
+
 ⚠️ 数据只存在浏览器里。**清理浏览器数据、换浏览器、换设备都会丢失**，请用「导出 JSON」定期备份。
+
+## Markdown 支持
+
+卡片正面和背面都可以写 Markdown，背诵时渲染；卡片库只显示去掉标记的纯文本摘要，避免列表里出现 `**`、`#`。
+
+| 语法 | 效果 |
+| --- | --- |
+| `# 标题` ~ `###### 标题` | 标题 |
+| `**粗体**` / `*斜体*` / `~~删除线~~` | 强调 |
+| 反引号包住文字 | 等宽底色 |
+| 三个反引号围栏 | 独立代码块，支持横向滚动 |
+| `- 列表` / `1. 列表` | 无序 / 有序列表 |
+| `> 引用` | 引用块 |
+| `[文字](https://example.com)` | 链接（只允许 http / https / mailto） |
+| `「文字」` | 粉色高亮（沿用旧版） |
+
+HTML 标签会被当作纯文本转义，`javascript:` 链接不会渲染；当前不支持图片、表格和 LaTeX 公式。
 
 ## WebDAV 同步
 
@@ -162,6 +186,10 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 - **立即同步**：先 `GET` 远端文件与本地合并，再 `PUT` 回远端；目录不存在会先自动创建
 
 合并规则是**按 `updatedAt` 时间戳逐条决胜**，卡片和卡组各自独立比较，因此多设备同时编辑不会互相覆盖整份数据（但同一条记录的同时修改仍会丢一方）。
+
+**删除也会同步**：删除卡片、删除卡组、清空全部数据都会写入 `deleted` 墓碑。合并时如果墓碑比远端那条记录新，就跳过远端记录，所以「删掉的卡组又回来」的僵尸数据问题已经修掉。墓碑随同步文件上传，也随 JSON 备份导出。
+
+> ⚠️ 2.7 之前的客户端不认识 `deleted` 字段，仍可能把已删除数据同步回来。多设备使用时请把所有设备都升级到 2.7+，再让旧客户端参与同步。
 
 同步文件路径为 `<地址>/<目录>/flashcards.json`。密码以明文存在 localStorage，请自行评估设备安全性。
 
@@ -204,7 +232,7 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ```
 Flashcards/
-├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1640 行）
+├── index.html      # 全部代码：HTML 结构 + CSS + JS（约 1867 行）
 ├── README.md       # 本文件
 ├── HANDOVER.md     # 项目接手文档：架构、数据流、扩展指引、遗留问题
 ├── .gitignore      # 忽略 .DS_Store 等
@@ -221,24 +249,25 @@ Flashcards/
 
 | 分块 | 行号 | 内容 |
 | --- | --- | --- |
-| storage | 507 | localStorage 读写、键名常量 |
-| seed / migrate | 523 | 3 张示例卡片、v1 → v2 数据迁移 |
-| data helpers | 572 | `cardsOf` / `orderedCards` / `groupById` 等查询 helper |
-| theme | 624 | 主题与字号应用 |
-| study view | 639 | 背诵视图渲染、翻面、切卡、星标、随机打乱 / 复位 |
-| group menu | 772 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
-| search sheet | 805 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
-| gestures | 857 | 手势：滑动切卡 / 卡内滚动避让 / 顶部 1/5 下拉搜索；触摸走 touch 事件、鼠标走 pointer（见 HANDOVER §12） |
-| library | 1029 | 卡片库列表与批量栏渲染 |
-| modal | 1077 | 通用弹窗框架 |
-| card editor | 1112 | 新增 / 编辑卡片 |
-| group manager | 1155 | 卡组增删改 |
-| batch group ops | 1209 | 批量加入 / 移出卡组 |
-| import / export | 1234 | JSON / TXT 导入导出、数据合并 |
-| webdav | 1307 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
-| views | 1457 | 视图切换、`closeTopOverlay` 浮层关闭 |
-| events | 1483 | 事件绑定与键盘快捷键 |
-| init | 1620 | 启动引导 |
+| storage | 539 | localStorage 读写、键名常量 |
+| markdown | 552 | `md()` / `mdInline()` / `mdPlain()`：安全 Markdown 子集 |
+| seed / migrate | 652 | 3 张示例卡片、v1 → v2 数据迁移 |
+| data helpers | 704 | `cardsOf` / `orderedCards` / 删除墓碑 / `groupById` 等查询 helper |
+| theme | 802 | 主题与字号应用 |
+| study view | 817 | 背诵视图渲染、翻面、切卡、星标、随机打乱 / 复位 |
+| group menu | 950 | 卡组下拉菜单（含「星标」入口、「清空星标」） |
+| search sheet | 983 | 下拉搜索面板：匹配、高亮、跳转到卡片 |
+| gestures | 1035 | 手势：滑动切卡 / 卡内滚动避让 / 顶部 1/5 下拉搜索；触摸走 touch 事件、鼠标走 pointer（见 HANDOVER §12） |
+| library | 1207 | 卡片库列表与批量栏渲染 |
+| modal | 1255 | 通用弹窗框架 |
+| card editor | 1302 | 新增 / 编辑卡片（支持 Markdown，组标签不抢输入焦点） |
+| group manager | 1345 | 卡组增删改 |
+| batch group ops | 1400 | 批量加入 / 移出卡组 |
+| import / export | 1425 | JSON / TXT 导入导出、数据合并 |
+| webdav | 1532 | WebDAV 连接测试与同步（建目录、检查返回码、错误提示） |
+| views | 1682 | 视图切换、`closeTopOverlay` 浮层关闭 |
+| events | 1708 | 事件绑定与键盘快捷键 |
+| init | 1847 | 启动引导 |
 
 ## 开发约定
 
@@ -270,7 +299,15 @@ window.Flashcards // { view(): string, home(): void, back(): boolean }
 
 后两个能力都通过 `davFetch()` 这层薄封装接入：**纯网页环境下 `window.Android` 为 undefined，行为与以前完全一致。**
 
-## 近期更新（v2.6）
+## 近期更新（v2.7）
+
+| 改动 | 之前 | 现在 |
+| --- | --- | --- |
+| Markdown | ❌ 卡片内容只按纯文本显示 | ✅ 正反面支持 Markdown 渲染；卡片库显示纯文本摘要 |
+| 云同步删除 | ❌ 删除卡组后一同步就复活 | ✅ 删除卡片/卡组/清空会写墓碑，同步后不再复活 |
+| 输入焦点 | ⚠️ 编辑卡片时键盘偶尔收起 | ✅ 修复组标签和自动聚焦抢焦点；点组标签不再让输入框失焦 |
+
+### v2.6
 
 | 改动 | 之前 | 现在 |
 | --- | --- | --- |
@@ -294,12 +331,15 @@ window.Flashcards // { view(): string, home(): void, back(): boolean }
 星标功能本身**不受影响**：卡片上的星标按钮、卡组菜单里的「星标」入口、菜单底部的「清空星标」都保留，
 键盘 `S` 也照常加星标。
 
-实现细节、踩过的坑与验收清单见 [HANDOVER §12](HANDOVER.md)、[§14](HANDOVER.md)、[§15](HANDOVER.md)。
+实现细节、踩过的坑与验收清单见 [HANDOVER §12](HANDOVER.md)、[§14](HANDOVER.md)、[§15](HANDOVER.md)、[§16](HANDOVER.md)、[§17](HANDOVER.md)、[§18](HANDOVER.md)。
 
 ## 已知问题
 
 - 批量操作栏在极窄屏（< 340px）下按钮文字会被省略号截断，功能不受影响。
 - 随机顺序只存在本地 `settings.orders`，不参与 WebDAV 同步；换设备后背诵顺序会回到默认（卡片本身仍会同步）。
+- Markdown 目前不支持图片、表格与 LaTeX；HTML 会按纯文本转义。
+- 2.7 之前的客户端不识别删除墓碑；升级完成前，旧客户端仍可能把已删除数据同步回来。
+- 「输入卡片时键盘偶尔收起」已修复两个高概率原因（组标签抢焦点、自动聚焦抢焦点），但未在真机稳定复现；若仍出现，请记录操作步骤。
 - WebDAV 密码明文存储于 localStorage。
 - 无自动化测试，回归验证依赖手动走查。
 - 长内容滚动与新手势只在无头 Chrome 里做过自动化验收，iOS / Android 真机手感仍建议装机复检。

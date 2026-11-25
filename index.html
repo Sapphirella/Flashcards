@@ -115,7 +115,38 @@ svg{display:block}
   font-family:var(--serif);font-size:var(--fs-back);line-height:1.85;color:var(--ink-2);
   white-space:pre-wrap;word-break:break-word;width:100%;text-align:left;
 }
-.back-text .hl{color:var(--pink-deep);border-bottom:1px solid var(--pink);padding-bottom:1px}
+.front-text .hl,.back-text .hl{color:var(--pink-deep);border-bottom:1px solid var(--pink);padding-bottom:1px}
+/* Markdown 渲染后的块级内容：必须关掉 pre-wrap，否则 <p>/<li> 之间会出现多余空行 */
+.front-text.md,.back-text.md{white-space:normal}
+.md p{margin:0 0 .55em}
+.md>:last-child{margin-bottom:0}
+.md h1,.md h2,.md h3,.md h4,.md h5,.md h6{
+  font-family:var(--serif);font-weight:700;line-height:1.35;text-align:left;
+  color:var(--ink);margin:.55em 0 .35em;
+}
+.md h1{font-size:1.3em}
+.md h2{font-size:1.2em}
+.md h3{font-size:1.1em}
+.md h4,.md h5,.md h6{font-size:1em}
+.md ul,.md ol{text-align:left;padding-left:1.35em;margin:.4em 0 .6em}
+.md li{margin:.12em 0}
+.md blockquote{
+  text-align:left;border-left:3px solid var(--line);padding-left:10px;margin:.5em 0;color:var(--muted);
+}
+.md code{
+  font-family:var(--mono);font-size:.88em;background:var(--surface-2);
+  padding:.08em .35em;border-radius:4px;
+}
+.md pre{
+  text-align:left;background:var(--surface-2);border:1px solid var(--line-soft);
+  border-radius:8px;padding:9px 11px;margin:.55em 0;overflow-x:auto;-webkit-overflow-scrolling:touch;
+}
+.md pre code{background:none;padding:0;font-size:.82em;line-height:1.6;white-space:pre}
+.front-text.md pre code{font-size:.62em}
+.md a{color:var(--green-deep);text-decoration:underline;text-underline-offset:2px}
+.md hr{border:0;border-top:1px solid var(--line);margin:.7em 0}
+.md strong{font-weight:700;color:var(--ink)}
+.md del{opacity:.65}
 .face__foot{
   flex:none;display:flex;justify-content:space-between;align-items:center;gap:10px;
   padding-top:12px;border-top:1px solid var(--line-soft);font-size:12px;color:var(--muted);
@@ -213,6 +244,7 @@ svg{display:block}
 .modal__foot{display:flex;gap:8px;padding:12px 16px calc(env(safe-area-inset-bottom) + 14px);flex:none}
 .field{margin-bottom:12px}
 .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+.label-tip{font-size:10.5px;color:var(--muted);font-weight:400;margin-left:4px}
 .input,textarea.input{
   width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;
   font-size:14px;outline:none;resize:vertical;
@@ -460,7 +492,7 @@ svg{display:block}
       <div class="group">
         <div class="group__t">关于</div>
         <div class="rows">
-          <div class="row"><span class="row__l">版本</span><span class="row__v">2.6</span></div>
+          <div class="row"><span class="row__l">版本</span><span class="row__v">2.7</span></div>
           <div class="row"><span class="row__l">卡片</span><span class="row__v" id="statCards">0</span></div>
           <div class="row"><span class="row__l">卡组</span><span class="row__v" id="statGroups">0</span></div>
         </div>
@@ -516,7 +548,104 @@ function now(){return Date.now()}
 const $=s=>document.querySelector(s);
 const el=id=>document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function hl(s){return esc(s).replace(/「([^」]*)」/g,'<span class="hl">「$1」</span>')}
+
+/* ================= markdown ================= */
+/* 单文件、零依赖的 Markdown 子集。输入不可信，所以先把 HTML 转义，
+   再只生成白名单标签；链接只允许 http(s)/mailto，绝不执行 javascript:。
+   支持：标题、粗体/斜体/删除线、行内代码、代码块、列表、引用、
+   分隔线、[文字](链接)，以及「」高亮。换行会保留为 <br>。 */
+function safeHref(raw){
+  const u=String(raw||'').trim();
+  return /^(https?:\/\/|mailto:)/i.test(u)?u:'';
+}
+function mdInline(raw){
+  let s=esc(String(raw==null?'':raw).replace(/\u0000/g,''));
+  const stash=[];
+  const hold=html=>{const k='\u0000'+(stash.length)+'\u0000';stash.push(html);return k;};
+  /* 代码和链接先占位，避免后续的 ** / * / _ 正则误伤标签和 URL */
+  s=s.replace(/`([^`\n]+)`/g,(m,code)=>hold('<code>'+code+'</code>'));
+  s=s.replace(/\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g,(m,text,url)=>{
+    const href=safeHref(url);
+    return href?hold('<a href="'+href+'" target="_blank" rel="noopener noreferrer">'+text+'</a>'):m;
+  });
+  s=s.replace(/「([^」\n]*)」/g,(m,inner)=>hold('<span class="hl">「'+inner+'」</span>'));
+  s=s.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/__([^_\n]+)__/g,'<strong>$1</strong>');
+  s=s.replace(/~~([^~\n]+)~~/g,'<del>$1</del>');
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>');
+  s=s.replace(/(^|[^_\w])_([^_\n]+)_/g,'$1<em>$2</em>');
+  return s.replace(/\u0000(\d+)\u0000/g,(m,i)=>stash[+i]||'');
+}
+function md(raw){
+  const src=String(raw==null?'':raw).replace(/\r\n?/g,'\n').replace(/\u0000/g,'');
+  if(!src.trim()) return '';
+  const lines=src.split('\n');
+  const out=[]; let i=0, para=[], list=null;
+  const flushPara=()=>{if(para.length){out.push('<p>'+para.map(mdInline).join('<br>')+'</p>');para=[];}};
+  const flushList=()=>{
+    if(list){out.push('<'+list.type+'>'+list.items.map(x=>'<li>'+mdInline(x)+'</li>').join('')+'</'+list.type+'>');list=null;}
+  };
+  while(i<lines.length){
+    const line=lines[i];
+    if(/^\s*```/.test(line)){
+      flushPara();flushList();
+      const lang=line.replace(/^\s*```/,'').trim();
+      const code=[];i++;
+      while(i<lines.length && !/^\s*```/.test(lines[i])){code.push(lines[i]);i++;}
+      if(i<lines.length)i++;
+      out.push('<pre><code'+(lang?' class="lang-'+esc(lang)+'"':'')+'>'+esc(code.join('\n'))+'</code></pre>');
+      continue;
+    }
+    const h=line.match(/^(#{1,6})\s+(.*)$/);
+    if(h){
+      flushPara();flushList();
+      const n=h[1].length;
+      out.push('<h'+n+'>'+mdInline(h[2])+'</h'+n+'>');
+      i++;continue;
+    }
+    if(/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)){
+      flushPara();flushList();out.push('<hr>');i++;continue;
+    }
+    if(/^\s*>/.test(line)){
+      flushPara();flushList();
+      const buf=[];
+      while(i<lines.length && /^\s*>/.test(lines[i])){buf.push(lines[i].replace(/^\s*>\s?/,''));i++;}
+      out.push('<blockquote>'+md(buf.join('\n'))+'</blockquote>');
+      continue;
+    }
+    const u=line.match(/^\s*[-*+]\s+(.*)$/);
+    const o=line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if(u||o){
+      flushPara();
+      const type=u?'ul':'ol';
+      if(!list||list.type!==type){flushList();list={type:type,items:[]};}
+      list.items.push((u||o)[1]);
+      i++;continue;
+    }
+    if(!line.trim()){flushPara();flushList();i++;continue;}
+    flushList();para.push(line);i++;
+  }
+  flushPara();flushList();
+  return out.join('');
+}
+/* 卡片库只显示摘要：去掉 Markdown 记号，避免列表里出现 ** 和 # */
+function mdPlain(raw){
+  let s=String(raw==null?'':raw).replace(/\r\n?/g,'\n').replace(/\u0000/g,'');
+  s=s.replace(/```[^\n]*\n([\s\S]*?)```/g,'$1');
+  s=s.replace(/`([^`\n]+)`/g,'$1');
+  s=s.replace(/!\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g,'$1');
+  s=s.replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g,'$1');
+  s=s.replace(/^#{1,6}\s+/gm,'');
+  s=s.replace(/^>\s?/gm,'');
+  s=s.replace(/^\s*[-*+]\s+/gm,'');
+  s=s.replace(/^\s*\d+[.)]\s+/gm,'');
+  s=s.replace(/^\s*([-*_])(?:\s*\1){2,}\s*$/gm,'');
+  s=s.replace(/(\*\*|__)([\s\S]*?)\1/g,'$2');
+  s=s.replace(/~~([\s\S]*?)~~/g,'$1');
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,'$1$2');
+  s=s.replace(/(^|[^_\w])_([^_\n]+)_/g,'$1$2');
+  return s.replace(/\n{3,}/g,'\n\n').trim();
+}
 function toast(msg){const t=el('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1700)}
 function fmt(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
 
@@ -534,12 +663,15 @@ function seed(){
     mk('abandon','v. 放弃；抛弃；遗弃',false,['单词']),
     mk('a² + b² = c²','勾股定理',false,['数理公式'])
   ];
-  return {version:2,cards:cards,groups:Object.values(gs),settings:{theme:'light',fs:'std',group:'all',orders:{},webdav:{url:'',user:'',pass:'',dir:'flashcards'}}};
+  return {version:2,cards:cards,groups:Object.values(gs),deleted:{cards:{},groups:{}},settings:{theme:'light',fs:'std',group:'all',orders:{},webdav:{url:'',user:'',pass:'',dir:'flashcards'}}};
 }
 /* 清空内容：只删卡片与卡组，保留外观（主题/字号）与 WebDAV 配置——
    这些是偏好而不是内容，清空卡片时一并重置只会让用户莫名其妙。
    卡片都清掉了，按卡组保存的随机顺序也一并清空。 */
 function emptyContent(){
+  /* 清空也是一次删除：先把现有 id 全部记进墓碑，否则下一次云同步会把它们拉回来 */
+  markDeleted('cards',store.cards.map(c=>c.id));
+  markDeleted('groups',store.groups.map(g=>g.id));
   store.cards=[];
   store.groups=[];
   store.settings.group='all';
@@ -552,7 +684,7 @@ function migrateV1(v1){
     (d.cards||[]).forEach(c=>cards.push({id:c.id,front:c.front,back:c.back,starred:!!c.starred,groups:[d.id],createdAt:c.createdAt||now(),updatedAt:c.updatedAt||now()}));
   });
   const s=v1.settings||{};
-  return {version:2,cards:cards,groups:groups,settings:Object.assign({},s,{webdav:s.webdav||{url:'',user:'',pass:'',dir:'flashcards'}})};
+  return {version:2,cards:cards,groups:groups,deleted:{cards:{},groups:{}},settings:Object.assign({},s,{webdav:s.webdav||{url:'',user:'',pass:'',dir:'flashcards'}})};
 }
 function load(){
   try{
@@ -609,6 +741,52 @@ function orderStore(){
 function groupCount(gid){return cardsOf(gid).length}
 function starCards(){return store.cards.filter(c=>c.starred)}
 function findCard(id){return store.cards.find(c=>c.id===id)}
+/* 删除墓碑：只删数组里的记录是不够的 —— 下次和远端合并时会被原样合并回来。
+   这里按 id 记下删除时间，合并时用 updatedAt 与墓碑时间做 last-write-wins。 */
+function normalizeDeleted(src){
+  const out={cards:{},groups:{}};
+  const d=src&&typeof src==='object'?src:{};
+  ['cards','groups'].forEach(k=>{
+    const m=d[k];
+    if(!m||typeof m!=='object'||Array.isArray(m)) return;
+    Object.keys(m).forEach(id=>{
+      const ts=Number(m[id]);
+      if(id&&isFinite(ts)&&ts>0) out[k][id]=ts;
+    });
+  });
+  return out;
+}
+function deletedMap(){
+  if(!store.deleted||typeof store.deleted!=='object'||Array.isArray(store.deleted)) store.deleted={};
+  ['cards','groups'].forEach(k=>{
+    if(!store.deleted[k]||typeof store.deleted[k]!=='object'||Array.isArray(store.deleted[k])) store.deleted[k]={};
+  });
+  return store.deleted;
+}
+function markDeleted(kind,ids){
+  const d=deletedMap();
+  const t=now();
+  (Array.isArray(ids)?ids:[ids]).forEach(id=>{if(id)d[kind][id]=t;});
+}
+function mergeDeleted(a,b){
+  ['cards','groups'].forEach(k=>{
+    const bm=b[k]||{};
+    Object.keys(bm).forEach(id=>{
+      if(!a[k][id]||bm[id]>a[k][id]) a[k][id]=bm[id];
+    });
+  });
+}
+/* 墓碑赢过旧记录：删掉记录；记录比墓碑新：删掉墓碑（说明后来又被编辑过）。
+   时间相等时按删除处理，避免「删了又回来」的边界抖动。 */
+function applyDeleted(d,items,kind){
+  return items.filter(e=>{
+    const t=d[kind][e.id];
+    if(!t) return true;
+    if(t>=(e.updatedAt||0)) return false;
+    delete d[kind][e.id];
+    return true;
+  });
+}
 function cardGroupNames(c){
   if(!c.groups||!c.groups.length) return [];
   return c.groups.map(groupName).filter(Boolean);
@@ -662,11 +840,11 @@ function renderStudy(){
         </button>`;
     el('faceFront').innerHTML=`
       <div class="face__top"><span class="tag">${esc(label)}</span><span class="num">${num}</span></div>
-      <div class="face__body"><p class="front-text">${esc(c.front||'')}</p></div>
+      <div class="face__body"><div class="front-text md">${md(c.front||'')}</div></div>
       <div class="face__foot">${starBtn(c.starred)}<span>${esc(src)}</span></div>`;
     el('faceBack').innerHTML=`
       <div class="face__top"><span class="tag">答案</span><span class="num">${num}</span></div>
-      <div class="face__body is-top"><p class="back-text">${c.back?hl(c.back):''}</p></div>
+      <div class="face__body is-top"><div class="back-text md">${c.back?md(c.back):''}</div></div>
       <div class="face__foot">${starBtn(c.starred)}<span>${esc(src)}</span></div>`;
   }
   el('progBar').style.width=cards.length?((ui.index+1)/cards.length*100)+'%':'0%';
@@ -879,7 +1057,7 @@ function scrollBoxAt(target){
 function gestureStart(x,y,target,src){
   if(g) return;
   if(!target||!target.closest) return;
-  if(target.closest('button,input,textarea,a,.menu,.modal,.searchsheet,.libfoot,.batchbar,.topbar,.set,.libbar')) return;
+  if(target.closest('button,input,textarea,a,.md pre,.menu,.modal,.searchsheet,.libfoot,.batchbar,.topbar,.set,.libbar')) return;
   if(ui.view!=='study') return;
   const isCard=cardEl.contains(target);
   /* 起点落在「现在真的能滚」的卡内正文上：纵向一律交给原生滚动，自研手势不抢。 */
@@ -1040,8 +1218,8 @@ function renderLib(){
       <div class="lrow">
         <button class="ckbox ${ui.sel.has(c.id)?'is-on':''}" data-sel="${c.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></button>
         <div class="lrow__b">
-          <div class="lrow__f">${esc(c.front||'')}</div>
-          <div class="lrow__k ${c.back?'':'is-empty'}">${esc(c.back||'—')}</div>
+          <div class="lrow__f">${esc(mdPlain(c.front||''))}</div>
+          <div class="lrow__k ${c.back?'':'is-empty'}">${esc(c.back?mdPlain(c.back):'—')}</div>
         </div>
       </div>`).join(''):`<div class="empty">暂无卡片</div>`;
   }else{
@@ -1050,8 +1228,8 @@ function renderLib(){
       const tags=names.length?names.map(n=>`<span class="gtag">${esc(n)}</span>`).join(''):`<span class="gtag is-none">未分组</span>`;
       return `<div class="lrow">
         <div class="lrow__b">
-          <div class="lrow__f">${esc(c.front||'')}</div>
-          <div class="lrow__k ${c.back?'':'is-empty'}">${esc(c.back||'—')}</div>
+          <div class="lrow__f">${esc(mdPlain(c.front||''))}</div>
+          <div class="lrow__k ${c.back?'':'is-empty'}">${esc(c.back?mdPlain(c.back):'—')}</div>
           <div class="lrow__g">${tags}</div>
         </div>
         <div class="lrow__act">
@@ -1091,13 +1269,25 @@ function openModal(title,bodyHTML,buttons,onClose){
   modalOnClose=onClose||null;
   el('modal').classList.add('show');
   el('scrim').classList.add('show');
-  setTimeout(()=>{const f=el('modalBody').querySelector('input,textarea');if(f)f.focus();},60);
+  /* 60ms 后自动聚焦第一个输入框。但如果用户手快，已经点了别的输入框，
+     这里再 focus 会抢走光标（表现为键盘闪一下/收回去），所以先让位给用户。 */
+  setTimeout(()=>{
+    if(el('modalBody').contains(document.activeElement)) return;
+    const f=el('modalBody').querySelector('input,textarea');if(f)f.focus();
+  },60);
 }
 function closeModal(){
   el('modal').classList.remove('show');
   if(modalOnClose){const f=modalOnClose;modalOnClose=null;f();}
   if(!el('searchSheet').classList.contains('show')&&!el('deckMenu').classList.contains('show')) el('scrim').classList.remove('show');
 }
+/* 卡组 chip 是按钮，点它会把焦点从 textarea 抢走、键盘跟着收回。
+   pointerdown 阻止默认焦点转移，但不会阻止 click（已在 Chrome 触摸/鼠标下验证）。 */
+['pointerdown','mousedown'].forEach(evt=>{
+  el('modalBody').addEventListener(evt,e=>{
+    if(e.target.closest('[data-pick]')) e.preventDefault();
+  });
+});
 el('modalBody').addEventListener('click',e=>{
   const ren=e.target.closest('[data-ren]');
   if(ren){renameGroup(ren.dataset.ren);return;}
@@ -1127,8 +1317,8 @@ function editCard(cardId,presetGroups){
   const cur=c||{id:uid(),front:'',back:'',groups:(presetGroups||[]).slice()};
   const sel=cur.groups||[];
   openModal(isNew?'新增卡片':'编辑卡片',`
-    <div class="field"><label>正面</label><textarea class="input" id="edFront" rows="3" placeholder="正面">${esc(cur.front)}</textarea></div>
-    <div class="field"><label>背面</label><textarea class="input" id="edBack" rows="5" placeholder="背面">${esc(cur.back)}</textarea></div>
+    <div class="field"><label>正面 <span class="label-tip">支持 Markdown</span></label><textarea class="input" id="edFront" rows="3" placeholder="正面">${esc(cur.front)}</textarea></div>
+    <div class="field"><label>背面 <span class="label-tip">支持 Markdown</span></label><textarea class="input" id="edBack" rows="5" placeholder="背面">${esc(cur.back)}</textarea></div>
     <div class="field"><label>卡组</label>${groupPicker(sel,'edGroups')}</div>
   `,[
     {text:'取消'},
@@ -1195,6 +1385,7 @@ function delGroup(id){
   openModal('删除卡组',`<p style="font-size:13.5px;color:var(--ink-2)">${esc(g.name)} · ${n} 张卡片将移出该卡组</p>`,[
     {text:'取消'},
     {text:'删除',cls:'btn--danger',fn:()=>{
+      markDeleted('groups',id);
       store.groups=store.groups.filter(x=>x.id!==id);
       if(store.settings.orders) delete store.settings.orders[id];
       store.cards.forEach(c=>{c.groups=c.groups.filter(x=>x!==id);touchCard(c);});
@@ -1260,18 +1451,51 @@ function exportTxt(){
 }
 function mergeStore(local,remote){
   const out=JSON.parse(JSON.stringify(local));
+  out.deleted=normalizeDeleted(local.deleted);
+  /* 先把两边的墓碑并起来：远端删除的记录，即使远端文件里还留着旧副本，也不能复活 */
+  mergeDeleted(out.deleted,normalizeDeleted(remote.deleted));
+
   (remote.groups||[]).forEach(rg=>{
+    if(!rg||!rg.id) return;
+    const t=out.deleted.groups[rg.id];
+    /* 墓碑 >= 远端记录的 updatedAt：远端这条比删除旧，跳过 */
+    if(t&&t>=(rg.updatedAt||0)) return;
+    /* 远端记录比墓碑新：说明删除之后它又被改过，记录胜出，墓碑作废 */
+    if(t) delete out.deleted.groups[rg.id];
     const lg=out.groups.find(g=>g.id===rg.id);
-    if(!lg){out.groups.push(JSON.parse(JSON.stringify(rg)));return;}
-    if((rg.updatedAt||0)>(lg.updatedAt||0)){lg.name=rg.name;lg.updatedAt=rg.updatedAt;}
+    if(!lg) out.groups.push(JSON.parse(JSON.stringify(rg)));
+    else if((rg.updatedAt||0)>(lg.updatedAt||0)){lg.name=rg.name;lg.updatedAt=rg.updatedAt;}
   });
   (remote.cards||[]).forEach(rc=>{
+    if(!rc||!rc.id) return;
+    const t=out.deleted.cards[rc.id];
+    if(t&&t>=(rc.updatedAt||0)) return;
+    if(t) delete out.deleted.cards[rc.id];
     const lc=out.cards.find(c=>c.id===rc.id);
-    if(!lc){out.cards.push(JSON.parse(JSON.stringify(rc)));return;}
-    if((rc.updatedAt||0)>(lc.updatedAt||0)){
+    if(!lc) out.cards.push(JSON.parse(JSON.stringify(rc)));
+    else if((rc.updatedAt||0)>(lc.updatedAt||0)){
       lc.front=rc.front;lc.back=rc.back;lc.starred=!!rc.starred;lc.groups=(rc.groups||[]).slice();lc.updatedAt=rc.updatedAt;
     }
   });
+
+  /* 再拿合并后的墓碑清理本地旧记录：远端删除、本地还留着的记录在这里被删掉 */
+  out.groups=applyDeleted(out.deleted,out.groups,'groups');
+  out.cards=applyDeleted(out.deleted,out.cards,'cards');
+
+  /* 卡组被删后，卡片上残留的 group id 也要摘掉，避免出现「幽灵卡组」引用 */
+  const gids=new Set(out.groups.map(g=>g.id));
+  out.cards.forEach(c=>{
+    if(Array.isArray(c.groups)){
+      const next=c.groups.filter(id=>gids.has(id));
+      if(next.length!==c.groups.length) c.groups=next;
+    }
+  });
+  /* 删除卡组时顺手清掉它的顺序项；all / star 是伪卡组，保留 */
+  if(out.settings&&out.settings.orders){
+    Object.keys(out.settings.orders).forEach(k=>{
+      if(k!=='all'&&k!=='star'&&!gids.has(k)) delete out.settings.orders[k];
+    });
+  }
   return out;
 }
 function importJson(file){
@@ -1286,8 +1510,9 @@ function importJson(file){
     openModal('导入',`<p style="font-size:13.5px;color:var(--ink-2)">${v2.cards.length} 张卡片 · ${v2.groups.length} 个卡组</p>`,[
       {text:'覆盖',cls:'btn--danger',fn:()=>{
         store.cards=v2.cards;store.groups=v2.groups;
-        /* 覆盖导入时只恢复备份里的顺序；没有就退回默认顺序。
+        /* 覆盖导入时恢复备份里的墓碑与顺序；没有就退回空墓碑/默认顺序。
            主题、字号、WebDAV 等外观/设备设置仍然保留当前设备的。 */
+        store.deleted=normalizeDeleted(v2.deleted);
         const o=v2.settings&&v2.settings.orders;
         store.settings.orders=(o&&typeof o==='object'&&!Array.isArray(o))?o:{};
         save();renderLib();renderStudy();toast('已覆盖导入');
@@ -1593,6 +1818,7 @@ el('batchBar').addEventListener('click',e=>{
   if(act==='del'){
     openModal('删除卡片',`<p style="font-size:13.5px;color:var(--ink-2)">${ui.sel.size} 张</p>`,[
       {text:'取消'},{text:'删除',cls:'btn--danger',fn:()=>{
+        markDeleted('cards',[...ui.sel]);
         store.cards=store.cards.filter(c=>!ui.sel.has(c.id));
         save();ui.sel.clear();renderLib();renderStudy();
       }}]);
@@ -1602,6 +1828,7 @@ function delCard(id){
   const c=findCard(id);if(!c)return;
   openModal('删除卡片',`<p style="font-size:13.5px;color:var(--ink-2)">${esc(c.front||'')}</p>`,[
     {text:'取消'},{text:'删除',cls:'btn--danger',fn:()=>{
+      markDeleted('cards',id);
       store.cards=store.cards.filter(x=>x.id!==id);
       save();renderLib();renderStudy();
     }}]);
